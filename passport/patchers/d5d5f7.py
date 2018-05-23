@@ -2,6 +2,19 @@ from passport.patchers import Patch, Patcher
 from passport.util import *
 
 class D5D5F7Patcher(Patcher):
+    """nibble count with weird bitstream involving $D5 and $F7 as delimiters
+
+tested on
+- Ace Detective
+- Cat 'n Mouse
+- Cotton Tales
+- Dyno-Quest
+- Easy Street
+- Fraction-oids
+- Math Magic
+- RoboMath
+- NoteCard Maker
+"""
     def should_run(self, track_num):
         # TODO
         return True

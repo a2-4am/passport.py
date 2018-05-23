@@ -12,4 +12,4 @@ def opener(filename):
         return wozimage.EDDReader(filename)
     raise RuntimeError("unrecognized file type")
 
-EDDToWoz(opener(sys.argv[1]), DefaultLogger)
+Crack(opener(sys.argv[1]), DefaultLogger)

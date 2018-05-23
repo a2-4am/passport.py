@@ -2,6 +2,10 @@ from passport.patchers import Patch, Patcher
 from passport.util import *
 
 class UniversalE7Patcher(Patcher):
+    """replace remnants of E7 bitstream with a compatible BYTEstream that fools most E7 protection checks
+
+(invented by qkumba, see PoC||GTFO 0x11 and 4am crack no. 655 Rocky's Boots 4.0 for explanation)
+"""
     e7sector = b'\x00'*0xA0 + b'\xAC\x00'*0x30
     
     def should_run(self, track_num):

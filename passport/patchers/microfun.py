@@ -2,6 +2,15 @@ from passport.patchers import Patch, Patcher
 from passport.util import *
 
 class MicrofunPatcher(Patcher):
+    """RWTS jumps to nibble check after reading certain sectors
+
+tested on
+- Station 5
+- The Heist
+- Miner 2049er (re-release)
+- Miner 2049er II
+- Short Circuit
+"""
     def should_run(self, track_num):
         return self.g.is_rwts and (track_num == 0)
 

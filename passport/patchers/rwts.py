@@ -2,6 +2,7 @@ from passport.patchers import Patch, Patcher
 from passport.util import *
 
 class RWTSPatcher(Patcher):
+    """RWTS fixups for DOS 3.3-shaped RWTSen"""
     def should_run(self, track_num):
         return self.g.is_rwts and (track_num == 0)
 

@@ -356,6 +356,7 @@ class BasePassportProcessor: # base class
         self.g = PassportGlobals()
         self.g.disk_image = disk_image
         self.logger = logger_class(self.g)
+        self.rwts = None
         self.output_tracks = {}
         self.patchers = []
         self.patches_found = []
@@ -367,7 +368,7 @@ class BasePassportProcessor: # base class
             #JMPBECAPatcher,
             #JMPB660Patcher,
             #JMPB720Patcher,
-            #BadEmuPatcher,
+            bademu.BadEmuPatcher,
             #BadEmu2Patcher,
             rwts.RWTSPatcher,
             #RWTSLogPatcher,
@@ -399,8 +400,8 @@ class BasePassportProcessor: # base class
             #T11DiskVolPatcher,
             #T02VolumeNamePatcher,
             universale7.UniversalE7Patcher,
-            #A6BC95Patcher,
-            #A5CountPatcher,
+            a6bc95.A6BC95Patcher,
+            a5count.A5CountPatcher,
             d5d5f7.D5D5F7Patcher,
             #ProDOSRWTSPatcher,
             #ProDOS6APatcher,
@@ -421,7 +422,7 @@ class BasePassportProcessor: # base class
             #BootCounterPatcher,
             #JMPB412Patcher,
             #JMPB400Patcher,
-            #AdvIntPatcher,
+            advint.AdventureInternationalPatcher,
             #JSR8635Patcher,
             #JMPB4BBPatcher,
             #DOS32MUSEPatcher,
@@ -436,13 +437,13 @@ class BasePassportProcessor: # base class
             if self.run():
                 self.postprocess()
 
-    def SkipTrack(self, rwts, track_num, track):
+    def SkipTrack(self, track_num, track):
         # don't look for whole-track protections on track 0, that's silly
         if track_num == 0: return False
         # Electronic Arts protection track?
         if track_num == 6:
-            if rwts.find_address_prologue(track):
-                address_field = rwts.address_field_at_point(track)
+            if self.rwts.find_address_prologue(track):
+                address_field = self.rwts.address_field_at_point(track)
                 if address_field and address_field.track_num == 5: return True
         # Nibble count track?
         repeated_nibble_count = 0
@@ -464,9 +465,97 @@ class BasePassportProcessor: # base class
     def IDDiversi(self, t00s00):
         """returns True if T00S00 is Diversi-DOS bootloader, or False otherwise"""
         return find.at(0xF1, t00s00,
-                      b'\xB3\xA3\xA0\xD2\xCF\xD2\xD2\xC5'
-                      b'\x8D\x87\x8D')
+                       b'\xB3\xA3\xA0\xD2\xCF\xD2\xD2\xC5'
+                       b'\x8D\x87\x8D')
 
+    def IDProDOS(self, t00s00):
+        """returns True if T00S00 is ProDOS bootloader, or False otherwise"""
+        return find.at(0x00, t00s00,
+                       b'\x01'
+                       b'\x38'
+                       b'\xB0\x03'
+                       b'\x4C')
+
+    def IDPascal(self, t00s00):
+        """returns True if T00S00 is Pascal bootloader, or False otherwise"""
+        if find.wild_at(0x00, t00s00,
+                        b'\x01'
+                        b'\xE0\x60'
+                        b'\xF0\x03'
+                        b'\x4C' + find.WILDCARD + b'\x08'):
+            return True
+        return find.at(0x00, t00s00,
+                       b'\x01'
+                       b'\xE0\x70'
+                       b'\xB0\x04'
+                       b'\xE0\x40'
+                       b'\xB0')
+
+    def IDDavidDOS(self, t00s00):
+        """returns True if T00S00 is David-DOS II bootloader, or False otherwise"""
+        if not find.at(0x01, t00s00,
+                       b'\xA5\x27'
+                       b'\xC9\x09'
+                       b'\xD0\x17'):
+            return False
+        return find.wild_at(0x4A, t00s00,
+                            b'\xA2' + find.WILDCARD + \
+                            b'\xBD' + find.WILDCARD + b'\x08' + \
+                            b'\x9D' + find.WILDCARD + b'\x04' + \
+                            b'\xCA'
+                            b'\x10\xF7')
+
+    def IDDatasoft(self, t00s00):
+        """returns True if T00S00 is encrypted Datasoft bootloader, or False otherwise"""
+        return find.at(0x00, t00s00,
+                       b'\x01\x4C\x7E\x08\x04\x8A\x0C\xB8'
+                       b'\x00\x56\x10\x7A\x00\x00\x1A\x16'
+                       b'\x12\x0E\x0A\x06\x53\x18\x9A\x02'
+                       b'\x10\x1B\x02\x10\x4D\x56\x15\x0B'
+                       b'\xBF\x14\x14\x54\x54\x54\x92\x81'
+                       b'\x1B\x10\x10\x41\x06\x73\x0A\x10'
+                       b'\x33\x4E\x00\x73\x12\x10\x33\x7C'
+                       b'\x00\x11\x20\xE3\x49\x50\x73\x1A'
+                       b'\x10\x41\x00\x23\x80\x5B\x0A\x10'
+                       b'\x0B\x4E\x9D\x0A\x10\x9D\x0C\x10'
+                       b'\x60\x1E\x53\x10\x90\x53\xBC\x90'
+                       b'\x53\x00\x90\xD8\x52\x00\xD8\x7C'
+                       b'\x00\x53\x80\x0B\x06\x41\x00\x09'
+                       b'\x04\x45\x0C\x63\x04\x90\x94\xD0'
+                       b'\xD4\x23\x04\x91\xA1\xEB\xCD\x06'
+                       b'\x95\xA1\xE1\x98\x97\x86')
+
+    def IDMicrograms(self, t00s00):
+        """returns True if T00S00 is Micrograms bootloader, or False otherwise"""
+        if not find.at(0x01, t00s00,
+                       b'\xA5\x27'
+                       b'\xC9\x09'
+                       b'\xD0\x12'
+                       b'\xA9\xC6'
+                       b'\x85\x3F'):
+            return False
+        return find.at(0x42, t00s00, b'\x4C\x00')
+
+    def IDQuickDOS(self, t00s00):
+        """returns True if T00S00 is Quick-DOS bootloader, or False otherwise"""
+        return find.at(0x01, t00s00,
+                       b'\xA5\x27'
+                       b'\xC9\x09'
+                       b'\xD0\x27'
+                       b'\x78'
+                       b'\xAD\x83\xC0')
+
+    def IDRDOS(self, t00s00):
+        """returns True if T00S00 is Quick-DOS bootloader, or False otherwise"""
+        return find.at(0x00, t00s00,
+                       b'\x01'
+                       b'\xA9\x60'
+                       b'\x8D\x01\x08'
+                       b'\xA2\x00'
+                       b'\xA0\x1F'
+                       b'\xB9\x00\x08'
+                       b'\x49')
+    
     def IDDOS33(self, t00s00):
         """returns True if T00S00 is DOS bootloader or some variation
         that can be safely boot traced, or False otherwise"""
@@ -544,13 +633,13 @@ class BasePassportProcessor: # base class
 
     def IDBootloader(self, t00):
         """returns RWTS object that can (hopefully) read the rest of the disk"""
-        rwts = UniversalRWTSIgnoreEpilogues(self.logger)
-        physical_sectors = rwts.decode_track(t00)
+        temporary_rwts_for_t00 = UniversalRWTSIgnoreEpilogues(self.logger)
+        physical_sectors = temporary_rwts_for_t00.decode_track(t00)
         if 0 not in physical_sectors:
             self.logger.PrintByID("fatal0000")
             return None
-        t00s00 = physical_sectors[0]
-    
+        t00s00 = physical_sectors[0].decoded
+
         if self.IDDOS33(t00s00):
             self.g.is_boot0 = True
             if self.IDDiversi(t00s00):
@@ -559,15 +648,30 @@ class BasePassportProcessor: # base class
                 self.logger.PrintByID("prontodos")
             else:
                 self.logger.PrintByID("dos33boot0")
-            # TODO handle JSR08B3 here
-            rwts = self.TraceDOS33(rwts.reorder_to_logical_sectors(physical_sectors), rwts)
-        else:
-            self.logger.PrintByID("builtin")
-            self.g.tried_univ = True
-            rwts = UniversalRWTS(self.logger)
-        return rwts
+            logical_sectors = temporary_rwts_for_t00.reorder_to_logical_sectors(physical_sectors)
+            return self.TraceDOS33(logical_sectors)
+        # TODO JSR08B3
+        # TODO MECC fastloader
+        # TODO DOS 3.3P
+        # TODO Laureate
+        # TODO Electronic Arts
+        # TODO DOS 3.2
+        # TODO IDEncoded44
+        # TODO IDEncoded53
+        self.g.is_prodos = self.IDProDOS(t00s00)
+        if self.g.is_prodos:
+            # TODO IDVolumeName
+            # TODO IDDinkeyDOS
+            pass
+        self.g.is_pascal = self.IDPascal(t00s00)
+        self.g.is_daviddos = self.IDDavidDOS(t00s00)
+        self.g.is_datasoft = self.IDDatasoft(t00s00)
+        self.g.is_micrograms = self.IDMicrograms(t00s00)
+        self.g.is_quickdos = self.IDQuickDOS(t00s00)
+        self.g.is_rdos = self.IDRDOS(t00s00)
+        return self.StartWithUniv()
 
-    def TraceDOS33(self, logical_sectors, rwts):
+    def TraceDOS33(self, logical_sectors):
         """returns RWTS object"""
 
         use_builtin = False
@@ -576,9 +680,7 @@ class BasePassportProcessor: # base class
             if i not in logical_sectors:
                 use_builtin = True
                 break
-        
         # TODO handle Protected.DOS here
-
         if not use_builtin:
             # check for "STY $48;STA $49" at RWTS entry point ($BD00)
             use_builtin = not find.at(0x00, logical_sectors[7], b'\x84\x48\x85\x49')
@@ -605,13 +707,19 @@ class BasePassportProcessor: # base class
         # TODO handle Infocom here
     
         if use_builtin:
-            self.logger.PrintByID("builtin")
-            return rwts
+            return self.StartWithUniv()
 
         self.logger.PrintByID("diskrwts")
         self.g.is_rwts = True
         return DOS33RWTS(logical_sectors, self.logger)
 
+    def StartWithUniv(self):
+        """return Universal RWTS object, log that we're using it, and set global flags appropriately"""
+        self.logger.PrintByID("builtin")
+        self.g.tried_univ = True
+        self.g.is_protdos = False
+        return UniversalRWTS(self.logger)
+        
     def preprocess(self):
         return True
     
@@ -625,8 +733,8 @@ class BasePassportProcessor: # base class
             self.tracks[float(track_num)] = self.g.disk_image.seek(float(track_num))
 
         # analyze track $00 to create an RWTS
-        rwts = self.IDBootloader(self.tracks[0])
-        if not rwts: return False
+        self.rwts = self.IDBootloader(self.tracks[0])
+        if not self.rwts: return False
 
         # initialize all patchers
         for P in self.patcher_classes:
@@ -635,15 +743,15 @@ class BasePassportProcessor: # base class
         # main loop - loop through disk from track $22 down to track $00
         for track_num in range(0x22, -1, -1):
             if track_num == 0 and self.g.tried_univ:
-                rwts = UniversalRWTSIgnoreEpilogues(self.logger)
+                self.rwts = UniversalRWTSIgnoreEpilogues(self.logger)
             should_run_patchers = False
             self.g.track = track_num
-            physical_sectors = rwts.decode_track(self.tracks[track_num], self.burn)
+            physical_sectors = self.rwts.decode_track(self.tracks[track_num], self.burn)
             if 0x0F not in physical_sectors:
-                if self.SkipTrack(rwts, track_num, self.tracks[track_num]):
-                    self.save_track(rwts, track_num, None)
+                if self.SkipTrack(track_num, self.tracks[track_num]):
+                    self.save_track(track_num, None)
                     continue
-            if len(physical_sectors) < rwts.sectors_per_track:
+            if len(physical_sectors) < self.rwts.sectors_per_track:
                 # TODO wrong in case where we switch mid-track.
                 # Need to save the sectors that worked with the original RWTS
                 # then append the ones that worked with the universal RWTS
@@ -651,25 +759,25 @@ class BasePassportProcessor: # base class
                     self.logger.PrintByID("fail")
                     return False
                 self.logger.PrintByID("switch", {"sector":0x0F}) # TODO find exact sector
-                rwts = UniversalRWTS(self.logger)
+                self.rwts = UniversalRWTS(self.logger)
                 self.g.tried_univ = True
-                physical_sectors = rwts.decode_track(self.tracks[track_num], self.burn)
-            if len(physical_sectors) < rwts.sectors_per_track:
+                physical_sectors = self.rwts.decode_track(self.tracks[track_num], self.burn)
+            if len(physical_sectors) < self.rwts.sectors_per_track:
                 self.logger.PrintByID("fail") # TODO find exact sector
                 return False
-            self.save_track(rwts, track_num, physical_sectors)
+            self.save_track(track_num, physical_sectors)
         return True
 
-    def save_track(self, rwts, track_num, physical_sectors):
+    def save_track(self, track_num, physical_sectors):
         pass
 
     def apply_patches(self, logical_sectors, patches):
         pass
 
 class Verify(BasePassportProcessor):
-    def save_track(self, rwts, track_num, physical_sectors):
+    def save_track(self, track_num, physical_sectors):
         if not physical_sectors: return {}
-        logical_sectors = rwts.reorder_to_logical_sectors(physical_sectors)
+        logical_sectors = self.rwts.reorder_to_logical_sectors(physical_sectors)
         should_run_patchers = (len(physical_sectors) == 16) # TODO
         if should_run_patchers:
             for patcher in self.patchers:
@@ -689,8 +797,8 @@ class Verify(BasePassportProcessor):
         self.logger.PrintByID("passver")
 
 class Crack(Verify):
-    def save_track(self, rwts, track_num, physical_sectors):
-        self.output_tracks[float(track_num)] = Verify.save_track(self, rwts, track_num, physical_sectors)
+    def save_track(self, track_num, physical_sectors):
+        self.output_tracks[float(track_num)] = Verify.save_track(self, track_num, physical_sectors)
         
     def apply_patches(self, logical_sectors, patches):
         for patch in patches:
@@ -725,7 +833,7 @@ class EDDToWoz(BasePassportProcessor):
         self.burn = 2
         return True
 
-    def save_track(self, rwts, track_num, physical_sectors):
+    def save_track(self, track_num, physical_sectors):
         track_num = float(track_num)
         track = self.tracks[track_num]
         if physical_sectors:
@@ -733,6 +841,7 @@ class EDDToWoz(BasePassportProcessor):
             for s in physical_sectors.values():
                 b.extend(track.bits[s.start_bit_index:s.end_bit_index])
         else:
+            # TODO this only works about half the time
             b = track.bits[:51021]
         self.output_tracks[track_num] = wozimage.Track(b, len(b))
     

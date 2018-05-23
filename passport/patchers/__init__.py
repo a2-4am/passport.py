@@ -1,4 +1,8 @@
 __all__ = [
+    "a5count",
+    "a6bc95",
+    "advint",
+    "bademu",
     "d5d5f7",
     "microfun",
     "rwts",
