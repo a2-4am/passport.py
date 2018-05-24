@@ -218,16 +218,14 @@ class RWTS:
                 # if we can't even find a single address prologue, just give up
                 self.logger.debug("can't find a single address prologue so LGTM or whatever")
                 break
+            if track.bit_index - start_bit_index > 256:
+                start_bit_index = track.bit_index - 256
             # decode address field
             address_field = self.address_field_at_point(track)
-            self.logger.debug(repr(address_field.sector_num))
             if address_field.sector_num in verified_sectors:
                 # the sector we just found is a sector we've already decoded
-                # properly, so skip past it
+                # properly, so skip it
                 self.logger.debug("duplicate sector %d" % address_field.sector_num)
-                if self.find_data_prologue(track):
-                    if self.data_field_at_point(track):
-                        self.verify_data_epilogue_at_point(track)
                 continue
             if address_field.sector_num > self.sectors_per_track:
                 # found a weird sector whose ID is out of range
@@ -276,6 +274,7 @@ class RWTS:
             # all good, and we want to save this sector, so do it
             sectors[address_field.sector_num] = Sector(address_field, decoded, start_bit_index, end_bit_index)
             verified_sectors.append(address_field.sector_num)
+            self.logger.debug("saved sector %s" % hex(address_field.sector_num))
         # remove placeholders of sectors that we found but couldn't decode properly
         # (made slightly more difficult by the fact that we're trying to remove
         # elements from an OrderedDict while iterating through the OrderedDict,
