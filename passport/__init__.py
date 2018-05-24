@@ -779,28 +779,30 @@ class BasePassportProcessor: # base class
 
         # main loop - loop through disk from track $22 down to track $00
         for track_num in range(0x22, -1, -1):
-            if track_num == 0 and self.g.tried_univ:
-                self.rwts = UniversalRWTSIgnoreEpilogues(self.logger)
-            should_run_patchers = False
             self.g.track = track_num
-            physical_sectors = self.rwts.decode_track(self.tracks[track_num], self.burn)
-            if 0x0F not in physical_sectors:
-                if self.SkipTrack(track_num, self.tracks[track_num]):
-                    self.save_track(track_num, None)
+            try_again = True
+            while try_again:
+                try_again = False
+                physical_sectors = self.rwts.decode_track(self.tracks[track_num], self.burn)
+                if len(physical_sectors) == self.rwts.sectors_per_track:
                     continue
-            if len(physical_sectors) < self.rwts.sectors_per_track:
+                if (0x0F not in physical_sectors) and self.SkipTrack(track_num, self.tracks[track_num]):
+                    physical_sectors = None
+                    continue
                 # TODO wrong in case where we switch mid-track.
                 # Need to save the sectors that worked with the original RWTS
                 # then append the ones that worked with the universal RWTS
-                if self.g.tried_univ:
-                    self.logger.PrintByID("fail")
-                    return False
-                self.logger.PrintByID("switch", {"sector":0x0F}) # TODO find exact sector
-                self.rwts = UniversalRWTS(self.logger)
-                self.g.tried_univ = True
-                physical_sectors = self.rwts.decode_track(self.tracks[track_num], self.burn)
-            if len(physical_sectors) < self.rwts.sectors_per_track:
-                self.logger.PrintByID("fail") # TODO find exact sector
+                if not self.g.tried_univ:
+                    self.logger.PrintByID("switch", {"sector":0x0F}) # TODO find exact sector
+                    self.rwts = UniversalRWTS(self.logger)
+                    self.g.tried_univ = True
+                    try_again = True
+                    continue
+                if track_num == 0 and type(self.rwts) != UniversalRWTSIgnoreEpilogues:
+                    self.rwts = UniversalRWTSIgnoreEpilogues(self.logger)
+                    try_again = True
+                    continue
+                self.logger.PrintByID("fail")
                 return False
             self.save_track(track_num, physical_sectors)
         return True
