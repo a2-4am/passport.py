@@ -91,6 +91,12 @@ class Track:
             n += b << bit_index
         yield n
 
+    def rewind(self, bit_count):
+        self.bit_index -= 1
+        if self.bit_index < 0:
+            self.bit_index = self.bit_count - 1
+            self.revolutions -= 1
+
     def find(self, sequence):
         starting_revolutions = self.revolutions
         seen = [0] * len(sequence)

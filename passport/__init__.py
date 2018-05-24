@@ -216,6 +216,7 @@ class RWTS:
             start_bit_index = track.bit_index
             if not self.find_address_prologue(track):
                 # if we can't even find a single address prologue, just give up
+                self.logger.debug("can't find a single address prologue so LGTM or whatever")
                 break
             # decode address field
             address_field = self.address_field_at_point(track)
@@ -243,6 +244,7 @@ class RWTS:
                 continue
             if not self.find_data_prologue(track):
                 # if we can't find a data field prologue, just give up
+                self.logger.debug(repr(self.data_prologue))
                 break
             # read and decode the data field, and verify the data checksum
             decoded = self.data_field_at_point(track)
@@ -300,7 +302,7 @@ class UniversalRWTS(RWTS):
         return False
 
     def verify_address_epilogue_at_point(self, track):
-        return True
+#        return True
         if not self.address_epilogue:
             self.address_epilogue = [next(track.nibble())]
             result = True
@@ -351,6 +353,35 @@ class DOS33RWTS(RWTS):
                       nibble_translate_table=nibble_translate_table,
                       logger=logger)
 
+class D5TimingBitRWTS(RWTS):
+    def __init__(self, logical_sectors, logger):
+        data_prologue = (logical_sectors[2][0xE7],
+                         0xAA,
+                         logical_sectors[2][0xFC])
+        data_epilogue = (logical_sectors[3][0x35],
+                         0xAA)
+        nibble_translate_table = {}
+        for nibble in range(0x96, 0x100):
+            nibble_translate_table[nibble] = logical_sectors[4][nibble]
+        RWTS.__init__(self,
+                      sectors_per_track=16,
+                      data_prologue=data_prologue,
+                      data_epilogue=data_epilogue,
+                      nibble_translate_table=nibble_translate_table,
+                      logger=logger)
+
+    def find_address_prologue(self, track):
+        starting_revolutions = track.revolutions
+        while (track.revolutions < starting_revolutions + 2):
+            if next(track.nibble()) == 0xD5:
+                bit = next(track.bit())
+                if bit == 0: return True:
+                track.rewind(1)
+        return False
+
+    def verify_address_epilogue_at_point(self, track):
+        return True
+    
 class BasePassportProcessor: # base class
     def __init__(self, disk_image, logger_class=DefaultLogger):
         self.g = PassportGlobals()
@@ -701,7 +732,13 @@ class BasePassportProcessor: # base class
             # check for RWTS variant that uses non-standard address for slot
             # LDX $1FE8 e.g. Pinball Construction Set (1983)
             use_builtin = find.at(0x43, logical_sectors[8], b'\xAE\xE8\x1F')
-
+        if not use_builtin:
+            # check for D5+timing+bit RWTS
+            if find.at(0x58, logical_sectors[3], b'\xEA\xBD\x8C\xC0\xC9\xD5'):
+                self.logger.PrintByID("diskrwts")
+                self.g.is_rwts = True
+                return D5TimingBitRWTS(logical_sectors, self.logger)
+                
         # TODO handle Milliken here
         # TODO handle Adventure International here
         # TODO handle Infocom here
