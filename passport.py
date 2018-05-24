@@ -3,30 +3,40 @@
 from passport import *
 import sys
 
-def usage():
-    print("usage: passport image.woz [Crack]\n"
-          "       passport image.woz [Verify]\n"
-          "       passport image.edd [Convert]\n"
-          "       default is Crack if .woz specified, Convert if .edd is specified"
-         )
-    sys.exit()
+def usage(error_code):
+    exe = sys.argv[0]
+    print(STRINGS["header"])
+    print("""usage: {exe} crack image.woz
+       {exe} verify image.woz
+       {exe} convert image.edd""".format(**locals()))
+    sys.exit(error_code)
 
 args = len(sys.argv)
 
-if args < 2:
-    usage()
+if args < 3:
+    usage(0)
 
-base, ext = os.path.splitext(sys.argv[1])
-ext = ext.lower()
-
-if ext == ".woz":
-    if args == 2 or sys.argv[2].lower() == "crack":
-        Crack(wozimage.WozReader(sys.argv[1]), DefaultLogger)
-    elif sys.argv[2].lower() == "verify":
-        Verify(wozimage.WozReader(sys.argv[1]), DefaultLogger)
-    else:
-        usage()
-elif ext == ".edd":
-    EDDToWoz(wozimage.EDDReader(sys.argv[1]), DefaultLogger)
+cmd, inputfile = sys.argv[1:3]
+if cmd == "crack":
+    processor = Crack
+elif cmd == "verify":
+    processor = Verify
+elif cmd == "convert":
+    processor = EDDToWoz
 else:
-    raise RuntimeError("unrecognized file type")
+    print("unrecognized command")
+    usage(1)
+
+base, ext = os.path.splitext(inputfile)
+ext = ext.lower()
+if ext == ".woz":
+    reader = wozimage.WozReader
+elif ext == ".edd":
+    reader = wozimage.EDDReader
+else:
+   print("unrecognized file type")
+   usage(1)
+
+logger = DefaultLogger # TODO add flag to change this
+
+processor(reader(inputfile), logger)
