@@ -37,6 +37,6 @@ else:
    print("unrecognized file type")
    usage(1)
 
-logger = DefaultLogger # TODO add flag to change this
+logger = DebugLogger # TODO add flag to change this
 
 processor(reader(inputfile), logger)

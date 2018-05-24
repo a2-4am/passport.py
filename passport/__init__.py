@@ -220,6 +220,7 @@ class RWTS:
                 break
             # decode address field
             address_field = self.address_field_at_point(track)
+            self.logger.debug(repr(address_field.sector_num))
             if address_field.sector_num in verified_sectors:
                 # the sector we just found is a sector we've already decoded
                 # properly, so skip past it
@@ -780,6 +781,7 @@ class BasePassportProcessor: # base class
         # main loop - loop through disk from track $22 down to track $00
         for track_num in range(0x22, -1, -1):
             self.g.track = track_num
+            self.logger.debug("Seeking to track %s" % hex(self.g.track))
             try_again = True
             while try_again:
                 try_again = False
