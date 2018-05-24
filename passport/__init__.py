@@ -375,7 +375,7 @@ class D5TimingBitRWTS(RWTS):
         while (track.revolutions < starting_revolutions + 2):
             if next(track.nibble()) == 0xD5:
                 bit = next(track.bit())
-                if bit == 0: return True:
+                if bit == 0: return True
                 track.rewind(1)
         return False
 
