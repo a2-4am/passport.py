@@ -441,17 +441,15 @@ class CommandEdit(BaseCommand):
         output = WozWriter(self.woz_image.info.get("creator", __displayname__))
         output.tmap = self.woz_image.tmap
         output.tracks = self.woz_image.tracks
-        output.info = self.woz_image.info
-        output.meta = self.woz_image.meta
+        output.info = self.woz_image.info.copy()
+        output.meta = self.woz_image.meta.copy()
         # add all new info fields
         for i in args.info or ():
             k, v = i.split(":", 1)
-            k = k.lower()
             output.info[k] = v
         # add all new metadata fields
         for m in args.meta or ():
             k, v = m.split(":", 1)
-            k = k.lower()
             v = v.split("|")
             if len(v) == 1:
                 v = v[0]

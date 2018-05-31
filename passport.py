@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
-from passport import *
+from passport import eddimage, wozimage
+from passport import DefaultLogger, DebugLogger
+from passport import Crack, Verify, EDDToWoz
+import os.path
 import sys
 
 def usage(error_code):
@@ -32,7 +35,7 @@ ext = ext.lower()
 if ext == ".woz":
     reader = wozimage.WozReader
 elif ext == ".edd":
-    reader = wozimage.EDDReader
+    reader = eddimage.EDDReader
 else:
    print("unrecognized file type")
    usage(1)
