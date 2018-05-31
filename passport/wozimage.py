@@ -12,8 +12,8 @@ import itertools
 
 __version__ = "0.1"
 __date__ = "2018-05-31"
-__programname__ = "wozardry"
-__displayname__ = __programname__ + " " + __version__ + " by 4am (" + __date__ + ")"
+__progname__ = "wozardry"
+__displayname__ = __progname__ + " " + __version__ + " by 4am (" + __date__ + ")"
 
 # domain-specific constants defined in .woz specification
 kWOZ1 = b'WOZ1'
@@ -381,7 +381,8 @@ class CommandVerify(BaseCommand):
         BaseCommand.__init__(self, "verify")
 
     def setup(self, subparser):
-        BaseCommand.setup(self, subparser, description="Verify file structure and metadata of a .woz disk image (produces no output unless a problem is found)")
+        BaseCommand.setup(self, subparser,
+                          description="Verify file structure and metadata of a .woz disk image (produces no output unless a problem is found)")
 
 class CommandDump(BaseCommand):
     kWidth = 30
@@ -390,7 +391,8 @@ class CommandDump(BaseCommand):
         BaseCommand.__init__(self, "dump")
 
     def setup(self, subparser):
-        BaseCommand.setup(self, subparser, description="Print all available information and metadata in a .woz disk image")
+        BaseCommand.setup(self, subparser,
+                          description="Print all available information and metadata in a .woz disk image")
 
     def __call__(self, args):
         BaseCommand.__call__(self, args)
@@ -429,11 +431,24 @@ class CommandEdit(BaseCommand):
         BaseCommand.setup(self,
                           subparser,
                           description="Edit information and metadata in a .woz disk image",
-                          epilog="""Tips:\n - Use repeated flags to edit multiple fields at once.\n - Use "key:" with no value to delete a metadata field.\n - Keys are case-sensitive.\n - Some values have format restrictions; read the .woz specification.""",
+                          epilog="""Tips:
+
+ - Use repeated flags to edit multiple fields at once.
+ - Use "key:" with no value to delete a metadata field.
+ - Keys are case-sensitive.
+ - Some values have format restrictions; read the .woz specification.""",
                           help=".woz disk image (modified in place)",
                           formatter_class=argparse.RawDescriptionHelpFormatter)
-        self.parser.add_argument("-i", "--info", type=str, action="append", help="""change information field. INFO format is "key:value". Acceptable keys are disk_type, write_protected, synchronized, cleaned, creator, version. Other keys are ignored.""")
-        self.parser.add_argument("-m", "--meta", type=str, action="append", help="""change metadata field. META format is "key:value". Standard keys are title, subtitle, publisher, developer, copyright, version, language, requires_ram, requires_machine, notes, side, side_name, contributor, image_date. Other keys are allowed.""")
+        self.parser.add_argument("-i", "--info", type=str, action="append",
+                                 help="""change information field.
+INFO format is "key:value".
+Acceptable keys are disk_type, write_protected, synchronized, cleaned, creator, version.
+Other keys are ignored.""")
+        self.parser.add_argument("-m", "--meta", type=str, action="append",
+                                 help="""change metadata field.
+META format is "key:value".
+Standard keys are title, subtitle, publisher, developer, copyright, version, language, requires_ram,
+requires_machine, notes, side, side_name, contributor, image_date. Other keys are allowed.""")
 
     def __call__(self, args):
         BaseCommand.__call__(self, args)
@@ -462,7 +477,11 @@ class CommandEdit(BaseCommand):
         
 if __name__ == "__main__":
     cmds = [CommandDump(), CommandVerify(), CommandEdit()]
-    parser = argparse.ArgumentParser(prog=__programname__, description="A multi-purpose tool for manipulating .woz disk images.\n\nSee '" + __programname__ + " <command> -h' for help on individual commands.", formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(prog=__progname__,
+                                     description="""A multi-purpose tool for manipulating .woz disk images.
+
+See '" + __progname__ + " <command> -h' for help on individual commands.""",
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-v", "--version", action="version", version=__displayname__)
     sp = parser.add_subparsers(dest="command", help="command")
     for command in cmds:
