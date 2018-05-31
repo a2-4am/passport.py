@@ -8,6 +8,7 @@ import bitarray
 import collections
 import os.path
 import sys
+import time
 
 class BaseLogger: # base class
     def __init__(self, g):
@@ -935,6 +936,7 @@ class EDDToWoz(BasePassportProcessor):
         output_filename = source_base + '.woz'
         self.logger.PrintByID("writing", {"filename":output_filename})
         woz_image = wozimage.WozWriter(STRINGS["header"].strip())
+        woz_image.meta["image_date"] = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
         for q in range(1 + (0x23 * 4)):
             track_num = q / 4
             if track_num in self.output_tracks:
