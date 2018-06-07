@@ -82,6 +82,8 @@ class PassportGlobals:
         self.force_disk_vol = False
         self.captured_disk_volume_number = False
         self.disk_volume_number = None
+        self.found_and_cleaned_weakbits = False
+        self.protection_enforces_write_protected = False
         # things about the conversion process
         self.tried_univ = False
         self.track = 0
@@ -124,14 +126,14 @@ class RWTS:
     }
 
     def __init__(self,
+                 g,
                  sectors_per_track = 16,
                  address_prologue = kDefaultAddressPrologue16,
                  address_epilogue = kDefaultAddressEpilogue16,
                  data_prologue = kDefaultDataPrologue16,
                  data_epilogue = kDefaultDataEpilogue16,
                  sector_order = kDefaultSectorOrder16,
-                 nibble_translate_table = kDefaultNibbleTranslationTable16,
-                 logger = None):
+                 nibble_translate_table = kDefaultNibbleTranslationTable16):
         self.sectors_per_track = sectors_per_track
         self.address_prologue = address_prologue
         self.address_epilogue = address_epilogue
@@ -139,7 +141,7 @@ class RWTS:
         self.data_epilogue = data_epilogue
         self.sector_order = sector_order
         self.nibble_translate_table = nibble_translate_table
-        self.logger = logger or SilentLogger
+        self.g = g
         self.track_num = 0
 
     def seek(self, track_num):
@@ -167,13 +169,13 @@ class RWTS:
             found.append(next(track.nibble()))
         return tuple(found) == tuple(nibbles)
         
-    def verify_address_epilogue_at_point(self, track):
+    def verify_address_epilogue_at_point(self, track, track_num, physical_sector_num):
         return self.verify_nibbles_at_point(track, self.address_epilogue)
 
-    def find_data_prologue(self, track):
+    def find_data_prologue(self, track, track_num, physical_sector_num):
         return track.find(self.data_prologue)
 
-    def data_field_at_point(self, track):
+    def data_field_at_point(self, track, track_num, physical_sector_num):
         disk_nibbles = []
         for i in range(343):
             disk_nibbles.append(next(track.nibble()))
@@ -207,10 +209,10 @@ class RWTS:
                 decoded[i + 172] += (((low2 & 0b010000) >> 3) + ((low2 & 0b100000) >> 5))
         return bytearray(decoded)
 
-    def verify_data_epilogue_at_point(self, track):
+    def verify_data_epilogue_at_point(self, track, track_num, physical_sector_num):
         return self.verify_nibbles_at_point(track, self.data_epilogue)
 
-    def decode_track(self, track, burn=0):
+    def decode_track(self, track, track_num, burn=0):
         sectors = collections.OrderedDict()
         if not track: return sectors
         starting_revolutions = track.revolutions
@@ -221,7 +223,7 @@ class RWTS:
             start_bit_index = track.bit_index
             if not self.find_address_prologue(track):
                 # if we can't even find a single address prologue, just give up
-                self.logger.debug("can't find a single address prologue so LGTM or whatever")
+                self.g.logger.debug("can't find a single address prologue so LGTM or whatever")
                 break
             # for edd->woz conversion, only save some of the bits preceding
             # the address prologue
@@ -229,43 +231,43 @@ class RWTS:
                 start_bit_index = track.bit_index - 256
             # decode address field
             address_field = self.address_field_at_point(track)
-            self.logger.debug("found sector %s" % hex(address_field.sector_num)[2:].upper())
+            self.g.logger.debug("found sector %s" % hex(address_field.sector_num)[2:].upper())
             if address_field.sector_num in verified_sectors:
                 # the sector we just found is a sector we've already decoded
                 # properly, so skip it
-                self.logger.debug("duplicate sector %d, continuing" % address_field.sector_num)
+                self.g.logger.debug("duplicate sector %d, continuing" % address_field.sector_num)
                 continue
             if address_field.sector_num > self.sectors_per_track:
                 # found a weird sector whose ID is out of range
                 # TODO: will eventually need to tweak this logic to handle Ultima V and others
-                self.logger.debug("sector ID out of range %d" % address_field.sector_num)
+                self.g.logger.debug("sector ID out of range %d" % address_field.sector_num)
                 continue
             # put a placeholder for this sector in this position in the ordered dict
             # so even if this copy doesn't pan out but a later copy does, sectors
             # will still be in the original order
             sectors[address_field.sector_num] = None
-            if not self.verify_address_epilogue_at_point(track):
+            if not self.verify_address_epilogue_at_point(track, track_num, address_field.sector_num):
                 # verifying the address field epilogue failed, but this is
                 # not necessarily fatal because there might be another copy
                 # of this sector later
-                self.logger.debug("verify_address_epilogue_at_point failed, continuing")
+                #self.g.logger.debug("verify_address_epilogue_at_point failed, continuing")
                 continue
-            if not self.find_data_prologue(track):
+            if not self.find_data_prologue(track, track_num, address_field.sector_num):
                 # if we can't find a data field prologue, just give up
-                self.logger.debug("find_data_prologue failed, giving up")
+                self.g.logger.debug("find_data_prologue failed, giving up")
                 break
             # read and decode the data field, and verify the data checksum
-            decoded = self.data_field_at_point(track)
+            decoded = self.data_field_at_point(track, track_num, address_field.sector_num)
             if not decoded:
-                self.logger.debug("data_field_at_point failed, continuing")
+                self.g.logger.debug("data_field_at_point failed, continuing")
                 # decoding data field failed, but this is not necessarily fatal
                 # because there might be another copy of this sector later
                 continue
-            if not self.verify_data_epilogue_at_point(track):
+            if not self.verify_data_epilogue_at_point(track, track_num, address_field.sector_num):
                 # verifying the data field epilogue failed, but this is
                 # not necessarily fatal because there might be another copy
                 # of this sector later
-                self.logger.debug("verify_data_epilogue_at_point failed")
+                self.g.logger.debug("verify_data_epilogue_at_point failed")
                 continue
             # store end index within track (used for .edd -> .woz conversion)
             end_bit_index = track.bit_index
@@ -277,7 +279,7 @@ class RWTS:
             # all good, and we want to save this sector, so do it
             sectors[address_field.sector_num] = Sector(address_field, decoded, start_bit_index, end_bit_index)
             verified_sectors.append(address_field.sector_num)
-            self.logger.debug("saved sector %s" % hex(address_field.sector_num))
+            self.g.logger.debug("saved sector %s" % hex(address_field.sector_num))
         # remove placeholders of sectors that we found but couldn't decode properly
         # (made slightly more difficult by the fact that we're trying to remove
         # elements from an OrderedDict while iterating through the OrderedDict,
@@ -292,8 +294,8 @@ class RWTS:
 class UniversalRWTS(RWTS):
     acceptable_address_prologues = ((0xD4,0xAA,0x96), (0xD5,0xAA,0x96))
 
-    def __init__(self, logger):
-        RWTS.__init__(self, address_epilogue=[], data_epilogue=[], logger=logger)
+    def __init__(self, g):
+        RWTS.__init__(self, g, address_epilogue=[], data_epilogue=[])
 
     def find_address_prologue(self, track):
         starting_revolutions = track.revolutions
@@ -304,45 +306,64 @@ class UniversalRWTS(RWTS):
             if tuple(seen) in self.acceptable_address_prologues: return True
         return False
 
-    def verify_address_epilogue_at_point(self, track):
+    def verify_address_epilogue_at_point(self, track, track_num, physical_sector_num):
 #        return True
         if not self.address_epilogue:
             self.address_epilogue = [next(track.nibble())]
             result = True
         else:
-            result = RWTS.verify_address_epilogue_at_point(self, track)
+            result = RWTS.verify_address_epilogue_at_point(self, track, track_num, physical_sector_num)
         next(track.nibble())
         next(track.nibble())
         return result
 
-    def verify_data_epilogue_at_point(self, track):
+    def verify_data_epilogue_at_point(self, track, track_num, physical_sector_num):
         if not self.data_epilogue:
             self.data_epilogue = [next(track.nibble())]
             result = True
         else:
-            result = RWTS.verify_data_epilogue_at_point(self, track)
+            result = RWTS.verify_data_epilogue_at_point(self, track, track_num, physical_sector_num)
         next(track.nibble())
         next(track.nibble())
         return result
 
 class UniversalRWTSIgnoreEpilogues(UniversalRWTS):
-    def verify_address_epilogue_at_point(self, track):
+    def verify_address_epilogue_at_point(self, track, track_num, physical_sector_num):
         return True
     
-    def verify_data_epilogue_at_point(self, track):
+    def verify_data_epilogue_at_point(self, track, track_num, physical_sector_num):
         return True
 
+class Track00RWTS(UniversalRWTSIgnoreEpilogues):
+    def data_field_at_point(self, track, track_num, physical_sector_num):
+        start_index = track.bit_index
+        start_revolutions = track.revolutions
+        decoded = UniversalRWTS.data_field_at_point(self, track, track_num, physical_sector_num)
+        if not decoded:
+            # If the sector didn't decode properly, rewind to the
+            # beginning of the data field before returning to the
+            # caller. This is for disks with a fake T00,S0A that
+            # is full of consecutive 0s, where if we consume the bitstream
+            # as nibbles, we'll end up consuming the next address field
+            # and it will seem like that sector doesn't exist. And that
+            # is generally logical sector 2, which is important not to
+            # miss at this stage because its absence triggers a different
+            # code path and everything falls apart.
+            track.bit_index = start_index
+            track.revolutions = start_revolutions
+        return decoded
+
 class DOS33RWTS(RWTS):
-    def __init__(self, logical_sectors, logger):
+    def __init__(self, logical_sectors, g):
         self.reset(logical_sectors)
         RWTS.__init__(self,
+                      g,
                       sectors_per_track=16,
                       address_prologue=self.address_prologue,
                       address_epilogue=self.address_epilogue,
                       data_prologue=self.data_prologue,
                       data_epilogue=self.data_epilogue,
-                      nibble_translate_table=self.nibble_translate_table,
-                      logger=logger)
+                      nibble_translate_table=self.nibble_translate_table)
 
     def reset(self, logical_sectors):
         self.address_prologue = (logical_sectors[3][0x55],
@@ -392,14 +413,93 @@ class D5TimingBitRWTS(DOS33RWTS):
                 track.rewind(1)
         return False
 
-    def verify_address_epilogue_at_point(self, track):
+    def verify_address_epilogue_at_point(self, track, track_num, physical_sector_num):
         return True
-    
+
+class InfocomRWTS(DOS33RWTS):
+    def reset(self, logical_sectors):
+        DOS33RWTS.reset(self, logical_sectors)
+        self.data_prologue = self.data_prologue[:2]
+        
+    def find_data_prologue(self, track, track_num, physical_sector_num):
+        if not DOS33RWTS.find_data_prologue(self, track, track_num, physical_sector_num):
+            return False
+        return next(track.nibble()) >= 0xAD
+
+class OptimumResourceRWTS(DOS33RWTS):
+    def data_field_at_point(self, track, track_num, physical_sector_num):
+        if (track_num, physical_sector_num) == (0x01, 0x0F):
+            # TODO actually decode these
+            disk_nibbles = []
+            for i in range(343):
+                disk_nibbles.append(next(track.nibble()))
+            return bytearray(256) # all zeroes for now
+        return DOS33RWTS.data_field_at_point(self, track, track_num, physical_sector_num)
+
+    def verify_data_epilogue_at_point(self, track, track_num, physical_sector_num):
+        if (track_num, physical_sector_num) == (0x01, 0x0F):
+            return True
+        return DOS33RWTS.verify_data_epilogue_at_point(self, track, track_num, physical_sector_num)
+
+class HeredityDogRWTS(DOS33RWTS):
+    def data_field_at_point(self, track, track_num, physical_sector_num):
+        if (track_num, physical_sector_num) == (0x00, 0x0A):
+            # This sector is fake, full of too many consecutive 0s,
+            # designed to read differently every time. We go through
+            # and clean the stray bits, and be careful not to go past
+            # the end so we don't include the next address prologue.
+            start_index = track.bit_index
+            while (track.bit_index < start_index + (343*8)):
+                if self.nibble_translate_table.get(next(track.nibble()), 0xFF) == 0xFF:
+                    track.bits[track.bit_index-8:track.bit_index] = 0
+                    self.g.found_and_cleaned_weakbits = True
+            return bytearray(256)
+        return DOS33RWTS.data_field_at_point(self, track, track_num, physical_sector_num)
+        
+    def verify_data_epilogue_at_point(self, track, track_num, physical_sector_num):
+        if (track_num, physical_sector_num) == (0x00, 0x0A):
+            return True
+        return DOS33RWTS.verify_data_epilogue_at_point(self, track, track_num, physical_sector_num)
+
+class BECARWTS(DOS33RWTS):
+    def is_protected_sector(self, track_num, physical_sector_num):
+        if track_num > 0: return True
+        return physical_sector_num not in (0x00, 0x0D, 0x0B, 0x09, 0x07, 0x05, 0x03, 0x01, 0x0E, 0x0C)
+        
+    def reset(self, logical_sectors):
+        DOS33RWTS.reset(self, logical_sectors)
+        self.data_prologue = self.data_prologue[:2]
+
+    def verify_address_epilogue_at_point(self, track, track_num, physical_sector_num):
+        if self.is_protected_sector(track_num, physical_sector_num):
+            return DOS33RWTS.verify_address_epilogue_at_point(self, track, track_num, physical_sector_num)
+        return True
+
+    def find_data_prologue(self, track, track_num, physical_sector_num):
+        if not DOS33RWTS.find_data_prologue(self, track, track_num, physical_sector_num):
+            return False
+        next(track.nibble())
+        if self.is_protected_sector(track_num, physical_sector_num):
+            next(track.bit())
+            next(track.nibble())
+            next(track.bit())
+            next(track.bit())
+        return True
+
+    def verify_data_epilogue_at_point(self, track, track_num, physical_sector_num):
+        if self.is_protected_sector(track_num, physical_sector_num):
+            next(track.nibble())
+        if track_num == 0:
+            next(track.nibble())
+            next(track.nibble())
+            return True
+        return DOS33RWTS.verify_data_epilogue_at_point(self, track, track_num, physical_sector_num)
+
 class BasePassportProcessor: # base class
     def __init__(self, disk_image, logger_class=DefaultLogger):
         self.g = PassportGlobals()
         self.g.disk_image = disk_image
-        self.logger = logger_class(self.g)
+        self.g.logger = logger_class(self.g)
         self.rwts = None
         self.output_tracks = {}
         self.patchers = []
@@ -501,7 +601,7 @@ class BasePassportProcessor: # base class
                 repeated_nibble_count = 0
             last_nibble = n
         if repeated_nibble_count == 512:
-            self.logger.PrintByID("sync")
+            self.g.logger.PrintByID("sync")
             return True
         # TODO IsUnformatted and other tests
         return False
@@ -677,24 +777,24 @@ class BasePassportProcessor: # base class
 
     def IDBootloader(self, t00):
         """returns RWTS object that can (hopefully) read the rest of the disk"""
-        temporary_rwts_for_t00 = UniversalRWTSIgnoreEpilogues(self.logger)
-        physical_sectors = temporary_rwts_for_t00.decode_track(t00)
+        temporary_rwts_for_t00 = Track00RWTS(self.g)
+        physical_sectors = temporary_rwts_for_t00.decode_track(t00, 0)
         if 0 not in physical_sectors:
-            self.logger.PrintByID("fatal0000")
+            self.g.logger.PrintByID("fatal0000")
             return None
         t00s00 = physical_sectors[0].decoded
 
         if self.IDDOS33(t00s00):
             self.g.is_boot0 = True
             if self.IDDiversi(t00s00):
-                self.logger.PrintByID("diversidos")
+                self.g.logger.PrintByID("diversidos")
             elif self.IDPronto(t00s00):
-                self.logger.PrintByID("prontodos")
+                self.g.logger.PrintByID("prontodos")
             else:
-                self.logger.PrintByID("dos33boot0")
+                self.g.logger.PrintByID("dos33boot0")
             logical_sectors = temporary_rwts_for_t00.reorder_to_logical_sectors(physical_sectors)
             if border.BorderPatcher(self.g).run(logical_sectors, 0):
-                return BorderRWTS(logical_sectors, self.logger)
+                return BorderRWTS(logical_sectors, self.g)
             return self.TraceDOS33(logical_sectors)
         # TODO JSR08B3
         # TODO MECC fastloader
@@ -750,32 +850,95 @@ class BasePassportProcessor: # base class
         if not use_builtin:
             # check for D5+timingbit RWTS
             if find.at(0x59, logical_sectors[3], b'\xBD\x8C\xC0\xC9\xD5'):
-                self.logger.PrintByID("diskrwts")
-                return D5TimingBitRWTS(logical_sectors, self.logger)
+                self.g.logger.PrintByID("diskrwts")
+                return D5TimingBitRWTS(logical_sectors, self.g)
                 
         # TODO handle Milliken here
         # TODO handle Adventure International here
-        # TODO handle Infocom here
+
+        if not use_builtin and (logical_sectors[0][0xFE] == 0x22):
+            return InfocomRWTS(logical_sectors, self.g)
+
+        if not use_builtin and (find.at(0xF4, logical_sectors[2],
+                                        b'\x4C\xCA') or
+                                find.at(0xFE, logical_sectors[2],
+                                        b'\x4C\xCA')):
+            self.g.logger.PrintByID("jmpbeca")
+            return BECARWTS(logical_sectors, self.g)
+
+        if not use_builtin and (find.wild_at(0x5D, logical_sectors[0],
+                                             b'\x68'
+                                             b'\x85' + find.WILDCARD + \
+                                             b'\x68' + \
+                                             b'\x85' + find.WILDCARD + \
+                                             b'\xA0\x01' + \
+                                             b'\xB1' + find.WILDCARD + \
+                                             b'\x85\x54')):
+            self.g.logger.PrintByID("optimum")
+            return OptimumResourceRWTS(logical_sectors, self.g)
+
+        if not use_builtin and (find.wild_at(0x16, logical_sectors[5],
+                                             b'\xF0\x05'
+                                             b'\xA2\xB2'
+                                             b'\x4C\xF0\xBB'
+                                             b'\xBD\x8C\xC0'
+                                             b'\xA9' + find.WILDCARD + \
+                                             b'\x8D\x00\x02'
+                                             b'\xBD\x8C\xC0'
+                                             b'\x10\xFB'
+                                             b'\xC9\xEB'
+                                             b'\xD0\xF7'
+                                             b'\xBD\x8C\xC0'
+                                             b'\x10\xFB'
+                                             b'\xC9\xD5'
+                                             b'\xD0\xEE'
+                                             b'\xBD\x8C\xC0'
+                                             b'\x10\xFB'
+                                             b'\xC9\xAA'
+                                             b'\xD0\xE5'
+                                             b'\xA9\x4C'
+                                             b'\xA0\x00'
+                                             b'\x99\x00\x95'
+                                             b'\x88'
+                                             b'\xD0\xFA'
+                                             b'\xCE\x46\xBB'
+                                             b'\xAD\x46\xBB'
+                                             b'\xC9\x07'
+                                             b'\xD0\xEC'
+                                             b'\xA9\x18'
+                                             b'\x8D\x42\xB9'
+                                             b'\xA9\x0A'
+                                             b'\x8D\xED\xB7'
+                                             b'\xD0\x05')):
+            self.g.logger.PrintByID("bb00")
+            if find.at(0x04, logical_sectors[5],
+                       b'\xBD\x8D\xC0'
+                       b'\xBD\x8E\xC0'
+                       b'\x30\x05'
+                       b'\xA2\xB1'
+                       b'\x4C\xF0\xBB'):
+                self.g.protection_enforces_write_protected = True
+            return HeredityDogRWTS(logical_sectors, self.g)
     
         if use_builtin:
             return self.StartWithUniv()
 
-        self.logger.PrintByID("diskrwts")
-        return DOS33RWTS(logical_sectors, self.logger)
+        self.g.logger.PrintByID("diskrwts")
+        return DOS33RWTS(logical_sectors, self.g)
 
     def StartWithUniv(self):
         """return Universal RWTS object, log that we're using it, and set global flags appropriately"""
-        self.logger.PrintByID("builtin")
+        self.g.logger.PrintByID("builtin")
         self.g.tried_univ = True
         self.g.is_protdos = False
-        return UniversalRWTS(self.logger)
+        return UniversalRWTS(self.g)
         
     def preprocess(self):
         return True
     
     def run(self):
-        self.logger.PrintByID("header")
-        self.logger.PrintByID("reading", {"filename":self.g.disk_image.filename})
+        self.g.logger.PrintByID("header")
+        self.g.logger.PrintByID("reading", {"filename":self.g.disk_image.filename})
 
         # get all raw track data from the source disk
         self.tracks = {}
@@ -794,15 +957,15 @@ class BasePassportProcessor: # base class
         for track_num in range(0x22, -1, -1):
             self.g.track = track_num
             self.rwts.seek(track_num)
-            self.logger.debug("Seeking to track %s" % hex(self.g.track))
+            self.g.logger.debug("Seeking to track %s" % hex(self.g.track))
             try_again = True
             while try_again:
                 try_again = False
-                physical_sectors = self.rwts.decode_track(self.tracks[track_num], self.burn)
+                physical_sectors = self.rwts.decode_track(self.tracks[track_num], track_num, self.burn)
                 if len(physical_sectors) == self.rwts.sectors_per_track:
                     continue
                 else:
-                    self.logger.debug("found %d sectors" % len(physical_sectors))
+                    self.g.logger.debug("found %d sectors" % len(physical_sectors))
                 if (0x0F not in physical_sectors) and self.SkipTrack(track_num, self.tracks[track_num]):
                     physical_sectors = None
                     continue
@@ -810,16 +973,16 @@ class BasePassportProcessor: # base class
                 # Need to save the sectors that worked with the original RWTS
                 # then append the ones that worked with the universal RWTS
                 if not self.g.tried_univ:
-                    self.logger.PrintByID("switch", {"sector":0x0F}) # TODO find exact sector
-                    self.rwts = UniversalRWTS(self.logger)
+                    self.g.logger.PrintByID("switch", {"sector":0x0F}) # TODO find exact sector
+                    self.rwts = UniversalRWTS(self.g)
                     self.g.tried_univ = True
                     try_again = True
                     continue
                 if track_num == 0 and type(self.rwts) != UniversalRWTSIgnoreEpilogues:
-                    self.rwts = UniversalRWTSIgnoreEpilogues(self.logger)
+                    self.rwts = UniversalRWTSIgnoreEpilogues(self.g)
                     try_again = True
                     continue
-                self.logger.PrintByID("fail")
+                self.g.logger.PrintByID("fail")
                 return False
             self.save_track(track_num, physical_sectors)
         return True
@@ -877,10 +1040,10 @@ class Verify(BasePassportProcessor):
     def apply_patches(self, logical_sectors, patches):
         for patch in patches:
             if patch.id:
-                self.logger.PrintByID(patch.id, patch.params)
+                self.g.logger.PrintByID(patch.id, patch.params)
 
     def postprocess(self):
-        self.logger.PrintByID("passver")
+        self.g.logger.PrintByID("passver")
 
 class Crack(Verify):
     def save_track(self, track_num, physical_sectors):
@@ -889,12 +1052,12 @@ class Crack(Verify):
     def apply_patches(self, logical_sectors, patches):
         for patch in patches:
             if patch.id:
-                self.logger.PrintByID(patch.id, patch.params)
+                self.g.logger.PrintByID(patch.id, patch.params)
             if len(patch.new_value) > 0:
                 b = logical_sectors[patch.sector_num].decoded
                 patch.params["old_value"] = b[patch.byte_offset:patch.byte_offset+len(patch.new_value)]
                 patch.params["new_value"] = patch.new_value
-                self.logger.PrintByID("modify", patch.params)
+                self.g.logger.PrintByID("modify", patch.params)
                 for i in range(len(patch.new_value)):
                     b[patch.byte_offset + i] = patch.new_value[i]
                 logical_sectors[patch.sector_num].decoded = b
@@ -902,7 +1065,7 @@ class Crack(Verify):
     def postprocess(self):
         source_base, source_ext = os.path.splitext(self.g.disk_image.filename)
         output_filename = source_base + '.dsk'
-        self.logger.PrintByID("writing", {"filename":output_filename})
+        self.g.logger.PrintByID("writing", {"filename":output_filename})
         with open(output_filename, "wb") as f:
             for track_num in range(0x23):
                 if track_num in self.output_tracks:
@@ -910,9 +1073,9 @@ class Crack(Verify):
                 else:
                     f.write(bytes(256*16))
         if self.patches_found:
-            self.logger.PrintByID("passcrack")
+            self.g.logger.PrintByID("passcrack")
         else:
-            self.logger.PrintByID("passcrack0")
+            self.g.logger.PrintByID("passcrack0")
 
 class EDDToWoz(BasePassportProcessor):
     def preprocess(self):
@@ -934,8 +1097,10 @@ class EDDToWoz(BasePassportProcessor):
     def postprocess(self):
         source_base, source_ext = os.path.splitext(self.g.disk_image.filename)
         output_filename = source_base + '.woz'
-        self.logger.PrintByID("writing", {"filename":output_filename})
+        self.g.logger.PrintByID("writing", {"filename":output_filename})
         woz_image = wozimage.WozWriter(STRINGS["header"].strip())
+        woz_image.info["cleaned"] = self.g.found_and_cleaned_weakbits
+        woz_image.info["write_protected"] = self.g.protection_enforces_write_protected
         woz_image.meta["image_date"] = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
         for q in range(1 + (0x23 * 4)):
             track_num = q / 4
