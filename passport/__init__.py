@@ -64,10 +64,7 @@ class PassportGlobals:
         self.possible_gamco = False
         self.is_optimum = False
         self.is_mecc_fastloader = False
-        self.is_mecc1 = False
-        self.is_mecc2 = False
-        self.is_mecc3 = False
-        self.is_mecc4 = False
+        self.mecc_variant = 0
         self.possible_d5d5f7 = False
         self.is_8b3 = False
         self.is_milliken1 = False
@@ -355,6 +352,7 @@ class Track00RWTS(UniversalRWTSIgnoreEpilogues):
 
 class DOS33RWTS(RWTS):
     def __init__(self, logical_sectors, g):
+        self.g = g
         self.reset(logical_sectors)
         RWTS.__init__(self,
                       g,
@@ -495,6 +493,66 @@ class BECARWTS(DOS33RWTS):
             return True
         return DOS33RWTS.verify_data_epilogue_at_point(self, track, track_num, physical_sector_num)
 
+class LaureateRWTS(DOS33RWTS):
+    # nibble table is in T00,S06
+    # address prologue is T00,S05 A$55,A$5F,A$6A
+    # address epilogue is T00,S05 A$91,A$9B
+    # data prologue is T00,S04 A$E7,A$F1,A$FC
+    # data epilogue is T00,S05 A$35,A$3F
+    def reset(self, logical_sectors):
+        self.address_prologue = (logical_sectors[5][0x55],
+                                 logical_sectors[5][0x5F],
+                                 logical_sectors[5][0x6A])
+        self.address_epilogue = (logical_sectors[5][0x91],
+                                 logical_sectors[5][0x9B])
+        self.data_prologue = (logical_sectors[4][0xE7],
+                              logical_sectors[4][0xF1],
+                              logical_sectors[4][0xFC])
+        self.data_epilogue = (logical_sectors[5][0x35],
+                              logical_sectors[5][0x3F])
+        self.nibble_translate_table = {}
+        for nibble in range(0x96, 0x100):
+            self.nibble_translate_table[nibble] = logical_sectors[6][nibble]
+
+class MECCRWTS(DOS33RWTS):
+    # MECC fastloaders
+    def __init__(self, mecc_variant, logical_sectors, g):
+        g.mecc_variant = mecc_variant
+        DOS33RWTS.__init__(self, logical_sectors, g)
+
+    def reset(self, logical_sectors):
+        self.nibble_translate_table = self.kDefaultNibbleTranslationTable16
+        self.address_epilogue = (0xDE, 0xAA)
+        self.data_epilogue = (0xDE, 0xAA)
+        if self.g.mecc_variant == 1:
+            self.address_prologue = (logical_sectors[0x0B][0x08],
+                                     logical_sectors[0x0B][0x12],
+                                     logical_sectors[0x0B][0x1D])
+            self.data_prologue = (logical_sectors[0x0B][0x8F],
+                                  logical_sectors[0x0B][0x99],
+                                  logical_sectors[0x0B][0xA3])
+        elif self.g.mecc_variant == 2:
+            self.address_prologue = (logical_sectors[7][0x83],
+                                     logical_sectors[7][0x8D],
+                                     logical_sectors[7][0x98])
+            self.data_prologue = (logical_sectors[7][0x15],
+                                  logical_sectors[7][0x1F],
+                                  logical_sectors[7][0x2A])
+        elif self.g.mecc_variant == 3:
+            self.address_prologue = (logical_sectors[0x0A][0xE8],
+                                     logical_sectors[0x0A][0xF2],
+                                     logical_sectors[0x0A][0xFD])
+            self.data_prologue = (logical_sectors[0x0B][0x6F],
+                                  logical_sectors[0x0B][0x79],
+                                  logical_sectors[0x0B][0x83])
+        elif self.g.mecc_variant == 4:
+            self.address_prologue = (logical_sectors[8][0x83],
+                                     logical_sectors[8][0x8D],
+                                     logical_sectors[8][0x98])
+            self.data_prologue = (logical_sectors[8][0x15],
+                                  logical_sectors[8][0x1F],
+                                  logical_sectors[8][0x2A])
+
 class BasePassportProcessor: # base class
     def __init__(self, disk_image, logger_class=DefaultLogger):
         self.g = PassportGlobals()
@@ -516,10 +574,10 @@ class BasePassportProcessor: # base class
             bademu2.BadEmu2Patcher,
             rwts.RWTSPatcher,
             #RWTSLogPatcher,
-            #MECC1Patcher,
-            #MECC2Patcher,
-            #MECC3Patcher,
-            #MECC4Patcher,
+            mecc1.MECC1Patcher,
+            mecc2.MECC2Patcher,
+            mecc3.MECC3Patcher,
+            mecc4.MECC4Patcher,
             #ROL1EPatcher,
             #JSRBB03Patcher,
             #DavidBB03Patcher,
@@ -775,6 +833,127 @@ class BasePassportProcessor: # base class
                        b'\xAD\xCB\xB5'
                        b'\x85\x42')
 
+    def IDLaureate(self, t00s00):
+        """returns True if T00S00 is Laureate bootloader, or False otherwise"""
+        if not find.at(0x2E, t00s00,
+                       b'\xAE\xFF\x08'
+                       b'\x30\x1E'
+                       b'\xE0\x02'
+                       b'\xD0\x05'
+                       b'\xA9\xBF'
+                       b'\x8D\xFE\x08'): return False
+        return find.at(0xF8, t00s00,
+                       b'\x4C\x00\xB7'
+                       b'\x00\x00\x00\xFF\x0B')
+
+    def IDMECC(self, t00s00):
+        """returns True if T00S00 is MECC bootloader, or False otherwise"""
+        return find.at(0x00, t00s00,
+                       b'\x01'
+                       b'\x4C\x1A\x08'
+                       b'\x17\x0F\x00'
+                       b'\x00\x0D\x0B\x09\x07\x05\x03\x01'
+                       b'\x0E\x0C\x0A\x08\x06\x04\x02\x0F')
+
+    def IDMECCVariant(self, logical_sectors):
+        """returns int (1-4) of MECC bootloader variant, or 0 if no known variant is detected"""
+        # variant 1 (labeled "M8" on original disks)
+        if find.wild_at(0x02, logical_sectors[0x0B],
+                        b'\xBD\x8C\xC0'
+                        b'\x10\xFB'
+                        b'\xC9' + find.WILDCARD + \
+                        b'\xD0\xEF'
+                        b'\xEA'
+                        b'\xBD\x8C\xC0'
+                        b'\x10\xFB'
+                        b'\xC9' + find.WILDCARD + \
+                        b'\xD0\xE5'
+                        b'\xA0\x03'
+                        b'\xBD\x8C\xC0'
+                        b'\x10\xFB'
+                        b'\xC9'):
+            if find.wild_at(0x89, logical_sectors[0x0B],
+                            b'\xBD\x8C\xC0'
+                            b'\x10\xFB'
+                            b'\xC9' + find.WILDCARD + \
+                            b'\xD0\xF4'
+                            b'\xEA'
+                            b'\xBD\x8C\xC0'
+                            b'\x10\xFB'
+                            b'\xC9' + find.WILDCARD + \
+                            b'\xD0\xF2'
+                            b'\xEA'
+                            b'\xBD\x8C\xC0'
+                            b'\x10\xFB'
+                            b'\xC9'):
+                return 1
+        # variant 2 (labeled "M7" on original disks)
+        m7a = b'\xBD\x8C\xC0' \
+              b'\x10\xFB' \
+              b'\xC9' + find.WILDCARD + \
+            b'\xD0\xF0' \
+            b'\xEA' \
+            b'\xBD\x8C\xC0' \
+            b'\x10\xFB' \
+            b'\xC9' + find.WILDCARD + \
+            b'\xD0\xF2' \
+            b'\xA0\x03' \
+            b'\xBD\x8C\xC0' \
+            b'\x10\xFB' \
+            b'\xC9'
+        m7b = b'\xBD\x8C\xC0' \
+              b'\x10\xFB' \
+              b'\x49'
+        m7c = b'\xEA' \
+              b'\xBD\x8C\xC0' \
+              b'\x10\xFB' \
+              b'\xC9' + find.WILDCARD + \
+              b'\xD0\xF2' \
+              b'\xA0\x56' \
+              b'\xBD\x8C\xC0' \
+              b'\x10\xFB' \
+              b'\xC9'
+        if find.wild_at(0x7D, logical_sectors[7], m7a):
+            if find.at(0x0F, logical_sectors[7], m7b):
+                if find.wild_at(0x18, logical_sectors[7], m7c):
+                    return 2
+        # variant 3 ("M7" variant found in Word Muncher 1.1 and others)
+        if find.wild_at(0xE2, logical_sectors[0x0A],
+                        b'\xBD\x8C\xC0'
+                        b'\x10\xFB'
+                        b'\xC9' + find.WILDCARD + \
+                        b'\xD0\xEF'
+                        b'\xEA'
+                        b'\xBD\x8C\xC0'
+                        b'\x10\xFB'
+                        b'\xC9' + find.WILDCARD + \
+                        b'\xD0\xF2'
+                        b'\xA0\x03'
+                        b'\xBD\x8C\xC0'
+                        b'\x10\xFB'
+                        b'\xC9'):
+            if find.wild_at(0x69, logical_sectors[0x0B],
+                            b'\xBD\x8C\xC0'
+                            b'\x10\xFB'
+                            b'\xC9' + find.WILDCARD + \
+                            b'\xD0\xF4'
+                            b'\xEA'
+                            b'\xBD\x8C\xC0'
+                            b'\x10\xFB'
+                            b'\xC9' + find.WILDCARD + \
+                            b'\xD0\xF2'
+                            b'\xEA'
+                            b'\xBD\x8C\xC0'
+                            b'\x10\xFB'
+                            b'\xC9'):
+                return 3
+        # variant 4 (same as variant 2 but everything is on sector 8 instead of 7)
+        if find.wild_at(0x7D, logical_sectors[8], m7a):
+            if find.at(0x0F, logical_sectors[8], m7b):
+                if find.wild_at(0x18, logical_sectors[8], m7c):
+                    return 2
+        return 0 # unknown variant
+
     def IDBootloader(self, t00):
         """returns RWTS object that can (hopefully) read the rest of the disk"""
         temporary_rwts_for_t00 = Track00RWTS(self.g)
@@ -783,6 +962,7 @@ class BasePassportProcessor: # base class
             self.g.logger.PrintByID("fatal0000")
             return None
         t00s00 = physical_sectors[0].decoded
+        logical_sectors = temporary_rwts_for_t00.reorder_to_logical_sectors(physical_sectors)
 
         if self.IDDOS33(t00s00):
             self.g.is_boot0 = True
@@ -792,14 +972,22 @@ class BasePassportProcessor: # base class
                 self.g.logger.PrintByID("prontodos")
             else:
                 self.g.logger.PrintByID("dos33boot0")
-            logical_sectors = temporary_rwts_for_t00.reorder_to_logical_sectors(physical_sectors)
             if border.BorderPatcher(self.g).run(logical_sectors, 0):
                 return BorderRWTS(logical_sectors, self.g)
             return self.TraceDOS33(logical_sectors)
         # TODO JSR08B3
+        if self.IDMECC(t00s00):
+            self.g.is_mecc_fastloader = True
+            self.g.logger.PrintByID("mecc")
+            mecc_variant = self.IDMECCVariant(logical_sectors)
+            self.g.logger.debug("mecc_variant = %d" % mecc_variant)
+            if mecc_variant:
+                return MECCRWTS(mecc_variant, logical_sectors, self.g)
         # TODO MECC fastloader
         # TODO DOS 3.3P
-        # TODO Laureate
+        if self.IDLaureate(t00s00):
+            self.g.logger.PrintByID("laureate")
+            return LaureateRWTS(logical_sectors, self.g)
         # TODO Electronic Arts
         # TODO DOS 3.2
         # TODO IDEncoded44

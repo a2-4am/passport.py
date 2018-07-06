@@ -3,6 +3,7 @@
 from passport import eddimage, wozimage
 from passport import DefaultLogger, DebugLogger
 from passport import Crack, Verify, EDDToWoz
+from passport.strings import STRINGS
 import os.path
 import sys
 
