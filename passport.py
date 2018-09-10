@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from passport import eddimage, wozimage
+from passport import eddimage, wozimage, a2rimage
 from passport import DefaultLogger, DebugLogger
 from passport import Crack, Verify, EDDToWoz
 from passport.strings import STRINGS
@@ -37,6 +37,8 @@ if ext == ".woz":
     reader = wozimage.WozReader
 elif ext == ".edd":
     reader = eddimage.EDDReader
+elif ext == ".a2r":
+    reader = a2rimage.A2RImage
 else:
    print("unrecognized file type")
    usage(1)

@@ -104,7 +104,7 @@ class Sector:
 
     def __getitem__(self, i):
         return self.decoded[i]
-        
+
 class RWTS:
     kDefaultSectorOrder16 =     (0x00, 0x07, 0x0E, 0x06, 0x0D, 0x05, 0x0C, 0x04, 0x0B, 0x03, 0x0A, 0x02, 0x09, 0x01, 0x08, 0x0F)
     kDefaultAddressPrologue16 = (0xD5, 0xAA, 0x96)
@@ -143,7 +143,7 @@ class RWTS:
 
     def seek(self, track_num):
         self.track_num = track_num
-        
+
     def reorder_to_logical_sectors(self, sectors):
         logical = {}
         for k, v in sectors.items():
@@ -165,7 +165,7 @@ class RWTS:
         for i in nibbles:
             found.append(next(track.nibble()))
         return tuple(found) == tuple(nibbles)
-        
+
     def verify_address_epilogue_at_point(self, track, track_num, physical_sector_num):
         return self.verify_nibbles_at_point(track, self.address_epilogue)
 
@@ -247,7 +247,7 @@ class RWTS:
                 # verifying the address field epilogue failed, but this is
                 # not necessarily fatal because there might be another copy
                 # of this sector later
-                #self.g.logger.debug("verify_address_epilogue_at_point failed, continuing")
+                self.g.logger.debug("verify_address_epilogue_at_point failed, continuing")
                 continue
             if not self.find_data_prologue(track, track_num, address_field.sector_num):
                 # if we can't find a data field prologue, just give up
@@ -256,9 +256,9 @@ class RWTS:
             # read and decode the data field, and verify the data checksum
             decoded = self.data_field_at_point(track, track_num, address_field.sector_num)
             if not decoded:
-                self.g.logger.debug("data_field_at_point failed, continuing")
                 # decoding data field failed, but this is not necessarily fatal
                 # because there might be another copy of this sector later
+                self.g.logger.debug("data_field_at_point failed, continuing")
                 continue
             if not self.verify_data_epilogue_at_point(track, track_num, address_field.sector_num):
                 # verifying the data field epilogue failed, but this is
@@ -327,7 +327,7 @@ class UniversalRWTS(RWTS):
 class UniversalRWTSIgnoreEpilogues(UniversalRWTS):
     def verify_address_epilogue_at_point(self, track, track_num, physical_sector_num):
         return True
-    
+
     def verify_data_epilogue_at_point(self, track, track_num, physical_sector_num):
         return True
 
@@ -392,7 +392,7 @@ class BorderRWTS(DOS33RWTS):
                               logical_sectors[9][0x02])
         self.data_epilogue = (logical_sectors[9][0x0C],
                               logical_sectors[9][0x11])
-        
+
 class D5TimingBitRWTS(DOS33RWTS):
     def reset(self, logical_sectors):
         DOS33RWTS.reset(self, logical_sectors)
@@ -418,7 +418,7 @@ class InfocomRWTS(DOS33RWTS):
     def reset(self, logical_sectors):
         DOS33RWTS.reset(self, logical_sectors)
         self.data_prologue = self.data_prologue[:2]
-        
+
     def find_data_prologue(self, track, track_num, physical_sector_num):
         if not DOS33RWTS.find_data_prologue(self, track, track_num, physical_sector_num):
             return False
@@ -453,7 +453,7 @@ class HeredityDogRWTS(DOS33RWTS):
                     self.g.found_and_cleaned_weakbits = True
             return bytearray(256)
         return DOS33RWTS.data_field_at_point(self, track, track_num, physical_sector_num)
-        
+
     def verify_data_epilogue_at_point(self, track, track_num, physical_sector_num):
         if (track_num, physical_sector_num) == (0x00, 0x0A):
             return True
@@ -463,7 +463,7 @@ class BECARWTS(DOS33RWTS):
     def is_protected_sector(self, track_num, physical_sector_num):
         if track_num > 0: return True
         return physical_sector_num not in (0x00, 0x0D, 0x0B, 0x09, 0x07, 0x05, 0x03, 0x01, 0x0E, 0x0C)
-        
+
     def reset(self, logical_sectors):
         DOS33RWTS.reset(self, logical_sectors)
         self.data_prologue = self.data_prologue[:2]
@@ -663,7 +663,7 @@ class BasePassportProcessor: # base class
             return True
         # TODO IsUnformatted and other tests
         return False
-    
+
     def IDDiversi(self, t00s00):
         """returns True if T00S00 is Diversi-DOS bootloader, or False otherwise"""
         return find.at(0xF1, t00s00,
@@ -757,7 +757,7 @@ class BasePassportProcessor: # base class
                        b'\xA0\x1F'
                        b'\xB9\x00\x08'
                        b'\x49')
-    
+
     def IDDOS33(self, t00s00):
         """returns True if T00S00 is DOS bootloader or some variation
         that can be safely boot traced, or False otherwise"""
@@ -1040,7 +1040,7 @@ class BasePassportProcessor: # base class
             if find.at(0x59, logical_sectors[3], b'\xBD\x8C\xC0\xC9\xD5'):
                 self.g.logger.PrintByID("diskrwts")
                 return D5TimingBitRWTS(logical_sectors, self.g)
-                
+
         # TODO handle Milliken here
         # TODO handle Adventure International here
 
@@ -1107,7 +1107,7 @@ class BasePassportProcessor: # base class
                        b'\x4C\xF0\xBB'):
                 self.g.protection_enforces_write_protected = True
             return HeredityDogRWTS(logical_sectors, self.g)
-    
+
         if use_builtin:
             return self.StartWithUniv()
 
@@ -1120,10 +1120,10 @@ class BasePassportProcessor: # base class
         self.g.tried_univ = True
         self.g.is_protdos = False
         return UniversalRWTS(self.g)
-        
+
     def preprocess(self):
         return True
-    
+
     def run(self):
         self.g.logger.PrintByID("header")
         self.g.logger.PrintByID("reading", {"filename":self.g.disk_image.filename})
@@ -1236,7 +1236,7 @@ class Verify(BasePassportProcessor):
 class Crack(Verify):
     def save_track(self, track_num, physical_sectors):
         self.output_tracks[float(track_num)] = Verify.save_track(self, track_num, physical_sectors)
-        
+
     def apply_patches(self, logical_sectors, patches):
         for patch in patches:
             if patch.id:
@@ -1249,7 +1249,7 @@ class Crack(Verify):
                 for i in range(len(patch.new_value)):
                     b[patch.byte_offset + i] = patch.new_value[i]
                 logical_sectors[patch.sector_num].decoded = b
-    
+
     def postprocess(self):
         source_base, source_ext = os.path.splitext(self.g.disk_image.filename)
         output_filename = source_base + '.dsk'
@@ -1281,7 +1281,7 @@ class EDDToWoz(BasePassportProcessor):
             # TODO this only works about half the time
             b = track.bits[:51021]
         self.output_tracks[track_num] = wozimage.Track(b, len(b))
-    
+
     def postprocess(self):
         source_base, source_ext = os.path.splitext(self.g.disk_image.filename)
         output_filename = source_base + '.woz'
