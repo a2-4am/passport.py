@@ -42,6 +42,9 @@ class A2RImage:
             raise WozError("Invalid track %s" % track_num)
         location = int(track_num * 4)
         if not self.tracks.get(location):
-            bits, track_length = self.to_bits(self.a2r_image.flux.get(location, [{}])[0])
-            self.tracks[location] = Track(bits, len(bits))
+            all_bits = bitarray.bitarray()
+            for flux_record in self.a2r_image.flux.get(location, [{}]):
+                bits, track_length = self.to_bits(flux_record)
+                all_bits.extend(bits)
+            self.tracks[location] = Track(all_bits, len(all_bits))
         return self.tracks[location]
