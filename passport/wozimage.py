@@ -75,11 +75,12 @@ def raise_if(cond, e, s=""):
     if cond: raise e(s)
 
 class Track:
-    def __init__(self, bits, bit_count):
+    def __init__(self, bits, bit_count, speed=None):
         self.bits = bits
         while len(self.bits) > bit_count:
             self.bits.pop()
         self.bit_count = bit_count
+        self.speed = speed
         self.bit_index = 0
         self.revolutions = 0
 
@@ -331,15 +332,17 @@ class WozWriter(WozValidator):
         self.tmap = [0xFF]*160
         self.meta = collections.OrderedDict()
 
-    def add_track(self, track_num, track):
-        tmap_id = int(track_num * 4)
+    def add(self, half_phase, track):
         trk_id = len(self.tracks)
         self.tracks.append(track)
-        self.tmap[tmap_id] = trk_id
-        if tmap_id:
-            self.tmap[tmap_id - 1] = trk_id
-        if tmap_id < 159:
-            self.tmap[tmap_id + 1] = trk_id
+        self.tmap[half_phase] = trk_id
+#        if half_phase:
+#            self.tmap[half_phase - 1] = trk_id
+#        if half_phase < 159:
+#            self.tmap[half_phase + 1] = trk_id
+
+    def add_track(self, track_num, track):
+        self.add(int(track_num * 4), track)
 
     def build_info(self):
         chunk = bytearray()

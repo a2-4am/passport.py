@@ -4,7 +4,7 @@ WILDCARD = b'\x97'
 
 def wild(source_bytes, search_bytes):
     """Search source_bytes (bytes object) for the first instance of search_bytes (bytes_object). search_bytes may contain WILDCARD, which matches any single byte (like "." in a regular expression). Returns index of first match, or -1 if no matches."""
-    search_bytes = re.escape(search_bytes).replace(b'\\'+WILDCARD, b'.')
+    search_bytes = re.escape(search_bytes).replace(WILDCARD, b'.')
     match = re.search(search_bytes, source_bytes)
     if match:
         return match.start()

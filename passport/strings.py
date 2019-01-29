@@ -1,5 +1,5 @@
 STRINGS = {
-    "header":      "Passport.py by 4am (2018-09-10)\n", # max 32 characters
+    "header":      "Passport.py by 4am (2019-01-28)\n", # max 32 characters
     "reading":     "Reading from {filename}\n",
     "diskrwts":    "Using disk's own RWTS\n",
     "bb00":        "T00,S05 Found $BB00 protection check\n"

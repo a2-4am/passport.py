@@ -1,48 +1,86 @@
 #!/usr/bin/env python3
 
+# (c) 2018-9 by 4am
+# MIT-licensed
+
 from passport import eddimage, wozimage, a2rimage
 from passport import DefaultLogger, DebugLogger
-from passport import Crack, Verify, EDDToWoz
+from passport import Crack, Verify, Convert
 from passport.strings import STRINGS
+import argparse
 import os.path
-import sys
 
-def usage(error_code):
-    exe = sys.argv[0]
-    print(STRINGS["header"])
-    print("""usage: {exe} crack image.woz
-       {exe} verify image.woz
-       {exe} convert image.edd""".format(**locals()))
-    sys.exit(error_code)
+__version__ = "0.2" # https://semver.org/
+__date__ = "2019-01-29"
+__progname__ = "passport"
 
-args = len(sys.argv)
+class BaseCommand:
+    def __init__(self, name):
+        self.name = name
+        self.logger = None
+        self.reader = None
+        self.processor = None
 
-if args < 3:
-    usage(0)
+    def setup(self, subparser, description=None, epilog=None, help="disk image (.a2r, .woz, .edd)", formatter_class=argparse.HelpFormatter):
+        self.parser = subparser.add_parser(self.name, description=description, epilog=epilog, formatter_class=formatter_class)
+        self.parser.add_argument("file", help=help)
+        self.parser.set_defaults(action=self)
 
-cmd, inputfile = sys.argv[1:3]
-if cmd == "crack":
-    processor = Crack
-elif cmd == "verify":
-    processor = Verify
-elif cmd == "convert":
-    processor = EDDToWoz
-else:
-    print("unrecognized command")
-    usage(1)
+    def __call__(self, args):
+        if not self.processor: return
+        if not self.reader:
+            base, ext = os.path.splitext(args.file)
+            ext = ext.lower()
+            if ext == ".woz":
+                self.reader = wozimage.WozReader
+            elif ext == ".edd":
+                self.reader = eddimage.EDDReader
+            elif ext == ".a2r":
+                self.reader = a2rimage.A2RImage
+            else:
+                print("unrecognized file type")
+        if not self.logger:
+            self.logger = args.debug and DebugLogger or DefaultLogger
+        self.processor(self.reader(args.file), self.logger)
 
-base, ext = os.path.splitext(inputfile)
-ext = ext.lower()
-if ext == ".woz":
-    reader = wozimage.WozReader
-elif ext == ".edd":
-    reader = eddimage.EDDReader
-elif ext == ".a2r":
-    reader = a2rimage.A2RImage
-else:
-   print("unrecognized file type")
-   usage(1)
+class CommandVerify(BaseCommand):
+    def __init__(self):
+        BaseCommand.__init__(self, "verify")
+        self.processor = Verify
 
-logger = DefaultLogger # TODO add flag to change this
+    def setup(self, subparser):
+        BaseCommand.setup(self, subparser,
+                          description="Verify track structure and sector data in a disk image")
 
-processor(reader(inputfile), logger)
+class CommandConvert(BaseCommand):
+    def __init__(self):
+        BaseCommand.__init__(self, "convert")
+        self.processor = Convert
+
+    def setup(self, subparser):
+        BaseCommand.setup(self, subparser,
+                          description="Convert a disk image to .woz format")
+
+class CommandCrack(BaseCommand):
+    def __init__(self):
+        BaseCommand.__init__(self, "crack")
+        self.processor = Crack
+
+    def setup(self, subparser):
+        BaseCommand.setup(self, subparser,
+                          description="Convert a disk image to .dsk format")
+
+if __name__ == "__main__":
+    cmds = [CommandVerify(), CommandConvert(), CommandCrack()]
+    parser = argparse.ArgumentParser(prog=__progname__,
+                                     description="""A multi-purpose tool for working with copy-protected Apple II disk images.
+
+See '""" + __progname__ + """ <command> -h' for help on individual commands.""",
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("-v", "--version", action="version", version=STRINGS["header"])
+    parser.add_argument("-d", "--debug", action="store_true", help="print debugging information while processing")
+    sp = parser.add_subparsers(dest="command", help="command")
+    for command in cmds:
+        command.setup(sp)
+    args = parser.parse_args()
+    args.action(args)
