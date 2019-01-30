@@ -7,7 +7,7 @@ class UniversalE7Patcher(Patcher):
 (invented by qkumba, see PoC||GTFO 0x11 and 4am crack no. 655 Rocky's Boots 4.0 for explanation)
 """
     e7sector = b'\x00'*0xA0 + b'\xAC\x00'*0x30
-    
+
     def should_run(self, track_num):
         return True
 

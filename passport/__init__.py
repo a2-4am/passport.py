@@ -586,7 +586,7 @@ class BasePassportProcessor: # base class
         self.patches_found = []
         self.patch_count = 0 # number of patches found across all tracks
         self.patcher_classes = [
-            #SunburstPatcher,
+            sunburst.SunburstPatcher,
             #JMPBCF0Patcher,
             #JMPBEB1Patcher,
             #JMPBECAPatcher,

@@ -22,4 +22,3 @@ tested on
                        b'\xC9\xD5'
                        b'\xF0\x12'): return []
         return [Patch(0, 3, 0x58, b'\xF0\x06')]
-        return patches

@@ -6,12 +6,11 @@
 from passport import eddimage, wozardry, a2rimage
 from passport import DefaultLogger, DebugLogger
 from passport import Crack, Verify, Convert
-from passport.strings import STRINGS
+from passport.strings import __date__, STRINGS
 import argparse
 import os.path
 
 __version__ = "0.2" # https://semver.org/
-__date__ = "2019-01-29"
 __progname__ = "passport"
 
 class BaseCommand:

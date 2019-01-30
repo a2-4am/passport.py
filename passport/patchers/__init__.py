@@ -14,6 +14,7 @@ __all__ = [
     "mecc4",
     "microfun",
     "rwts",
+    "sunburst",
     "universale7",
     ]
 
@@ -41,4 +42,3 @@ class Patcher: # base class
     def run(self, logical_sectors, track_num):
         """returns list of Patch objects representing patches that could be applied to logical_sectors"""
         return []
-
