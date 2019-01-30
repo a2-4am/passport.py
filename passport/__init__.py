@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from passport import wozimage
+from passport import wozardry
 from passport.patchers import *
 from passport.strings import *
 from passport.util import *
@@ -1342,13 +1342,13 @@ class Convert(BasePassportProcessor):
             b = track.bits[:51021]
         # output_tracks is indexed on physical track number here because the
         # point of .woz is to capture the physical layout of the original disk
-        self.output_tracks[physical_track_num] = wozimage.Track(b, len(b))
+        self.output_tracks[physical_track_num] = wozardry.Track(b, len(b))
 
     def postprocess(self):
         source_base, source_ext = os.path.splitext(self.g.disk_image.filename)
         output_filename = source_base + '.woz'
         self.g.logger.PrintByID("writing", {"filename":output_filename})
-        woz_image = wozimage.WozWriter(STRINGS["header"].strip())
+        woz_image = wozardry.WozWriter(STRINGS["header"].strip())
         woz_image.info["cleaned"] = self.g.found_and_cleaned_weakbits
         woz_image.info["write_protected"] = self.g.protection_enforces_write_protected
         woz_image.meta["image_date"] = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
@@ -1359,7 +1359,7 @@ class Convert(BasePassportProcessor):
         with open(output_filename, 'wb') as f:
             woz_image.write(f)
         try:
-            wozimage.WozReader(output_filename)
+            wozardry.WozReader(output_filename)
         except Exception as e:
             os.remove(output_filename)
             raise Exception from e

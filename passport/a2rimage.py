@@ -1,7 +1,9 @@
-from passport.wozimage import DiskImage, Track, WozError, raise_if
+from passport.wozardry import Track, raise_if
 from passport import a2rchery
 import bitarray
 import collections
+
+class A2RSeekError(a2rchery.A2RError): pass
 
 class A2RImage:
     def __init__(self, filename=None, stream=None):
@@ -33,35 +35,18 @@ class A2RImage:
             flux_total = 0
         return bits, estimated_track_length, speed
 
-    def find_track_length(self, bits, estimated_track_length):
-        twice_bits = bits + bits
-        for matchlen in (8192, 4096, 2048, 1024):
-            if estimated_track_length < 32768 or len(bits) < 32768: continue
-            for offset in range(0, estimated_track_length, matchlen):
-                for length_delta in (0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 7, -7, 8, -8, 9, -9, 10, -10, 11, -11, 12, -12):
-                    real_length = estimated_track_length + length_delta
-                    if real_length > 53168: continue
-                    if twice_bits[8+offset:offset+matchlen] == twice_bits[real_length+8+offset:real_length+matchlen+offset]:
-                        return real_length
-        return 0
-
-    def normalize(self, flux_records):
-        bits_and_lengths = [self.to_bits(flux_record) for flux_record in flux_records]
-        all_bits = [bits[8:self.find_track_length(bits, estimated_track_length)+8] for bits, estimated_track_length, speed in bits_and_lengths]
-        return all_bits
-
     def seek(self, track_num):
         if type(track_num) != float:
             track_num = float(track_num)
         if track_num < 0.0 or \
            track_num > 35.0 or \
            track_num.as_integer_ratio()[1] not in (1,2,4):
-            raise WozError("Invalid track %s" % track_num)
+            raise A2RSeekError("Invalid track %s" % track_num)
         location = int(track_num * 4)
         if not self.tracks.get(location):
             all_bits = bitarray.bitarray()
             for flux_record in self.a2r_image.flux.get(location, [{}]):
                 bits, track_length, speed = self.to_bits(flux_record)
                 all_bits.extend(bits)
-            self.tracks[location] = Track(all_bits, len(all_bits), speed=speed)
+            self.tracks[location] = Track(all_bits, len(all_bits))
         return self.tracks[location]

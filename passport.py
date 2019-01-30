@@ -3,7 +3,7 @@
 # (c) 2018-9 by 4am
 # MIT-licensed
 
-from passport import eddimage, wozimage, a2rimage
+from passport import eddimage, wozardry, a2rimage
 from passport import DefaultLogger, DebugLogger
 from passport import Crack, Verify, Convert
 from passport.strings import STRINGS
@@ -32,7 +32,7 @@ class BaseCommand:
             base, ext = os.path.splitext(args.file)
             ext = ext.lower()
             if ext == ".woz":
-                self.reader = wozimage.WozReader
+                self.reader = wozardry.WozReader
             elif ext == ".edd":
                 self.reader = eddimage.EDDReader
             elif ext == ".a2r":
