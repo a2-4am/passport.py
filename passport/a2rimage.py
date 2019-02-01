@@ -44,9 +44,20 @@ class A2RImage:
             raise A2RSeekError("Invalid track %s" % track_num)
         location = int(track_num * 4)
         if not self.tracks.get(location):
-            all_bits = bitarray.bitarray()
-            for flux_record in self.a2r_image.flux.get(location, [{}]):
+            # just return the bits from the first flux read
+            # (if the caller determines that they're not good, it will call reseek()
+            # which is smarter but takes longer)
+            bits = bitarray.bitarray()
+            for flux_record in self.a2r_image.flux.get(location, [{}])[:1]:
                 bits, track_length, speed = self.to_bits(flux_record)
-                all_bits.extend(bits)
-            self.tracks[location] = Track(all_bits, len(all_bits))
+            self.tracks[location] = Track(bits, len(bits))
+        return self.tracks[location]
+
+    def reseek(self, track_num):
+        location = int(track_num * 4)
+        all_bits = bitarray.bitarray()
+        for flux_record in self.a2r_image.flux.get(location, [{}]):
+            bits, track_length, speed = self.to_bits(flux_record)
+            all_bits.extend(bits)
+        self.tracks[location] = Track(all_bits, len(all_bits))
         return self.tracks[location]

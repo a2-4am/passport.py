@@ -1,23 +1,3 @@
-__all__ = [
-    "a5count",
-    "a6bc95",
-    "advint",
-    "bademu",
-    "bademu2",
-    "bbf9",
-    "bootcounter",
-    "border",
-    "d5d5f7",
-    "mecc1",
-    "mecc2",
-    "mecc3",
-    "mecc4",
-    "microfun",
-    "rwts",
-    "sunburst",
-    "universale7",
-    ]
-
 class Patch:
     # represents a single patch that could be applied to a disk image
     def __init__(self, track_num, sector_num, byte_offset, new_value, id=None, params={}):
@@ -42,3 +22,21 @@ class Patcher: # base class
     def run(self, logical_sectors, track_num):
         """returns list of Patch objects representing patches that could be applied to logical_sectors"""
         return []
+
+from .a5count import *
+from .a6bc95 import *
+from .advint import *
+from .bademu import *
+from .bademu2 import *
+from .bbf9 import *
+from .bootcounter import *
+from .border import *
+from .d5d5f7 import *
+from .mecc1 import *
+from .mecc2 import *
+from .mecc3 import *
+from .mecc4 import *
+from .microfun import *
+from .rwts import *
+from .sunburst import *
+from .universale7 import *

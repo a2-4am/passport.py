@@ -4,7 +4,7 @@
 # MIT-licensed
 
 from passport import eddimage, wozardry, a2rimage
-from passport import DefaultLogger, DebugLogger
+from passport.loggers import DefaultLogger, DebugLogger
 from passport import Crack, Verify, Convert
 from passport.strings import __date__, STRINGS
 import argparse

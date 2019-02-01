@@ -50,4 +50,5 @@ tested on
         return [Patch(0, 3, 0x40, bytes.fromhex("F0")),
                 Patch(0, 3, 0x9C, bytes.fromhex("D0")),
                 Patch(0, 6, 0x69, bytes.fromhex("20 C3 BC 20 C3 BC")),
-                Patch(0, 8, 0x8C, bytes.fromhex("A0 B9"))]
+                Patch(0, 8, 0x8C, bytes.fromhex("A0 B9")),
+                Patch(0, 4, 0xC0, bytes.fromhex("C0 C1 C2 C3 C4 C5 C6 C7 C8 C9 CA"))]
