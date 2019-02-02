@@ -2,6 +2,7 @@ from passport.loggers import *
 from passport.rwts import *
 from passport.patchers import *
 from passport.strings import *
+from passport.constants import *
 from passport.util import *
 from passport import wozardry
 import bitarray
@@ -165,32 +166,16 @@ class BasePassportProcessor: # base class
 
     def IDDiversi(self, t00s00):
         """returns True if T00S00 is Diversi-DOS bootloader, or False otherwise"""
-        return find.at(0xF1, t00s00,
-                       b'\xB3\xA3\xA0\xD2\xCF\xD2\xD2\xC5'
-                       b'\x8D\x87\x8D')
+        return find.at(0xF1, t00s00, kIDDiversiDOSBootloader)
 
     def IDProDOS(self, t00s00):
         """returns True if T00S00 is ProDOS bootloader, or False otherwise"""
-        return find.at(0x00, t00s00,
-                       b'\x01'
-                       b'\x38'
-                       b'\xB0\x03'
-                       b'\x4C')
+        return find.at(0x00, t00s00, kIDProDOSBootloader)
 
     def IDPascal(self, t00s00):
         """returns True if T00S00 is Pascal bootloader, or False otherwise"""
-        if find.wild_at(0x00, t00s00,
-                        b'\x01'
-                        b'\xE0\x60'
-                        b'\xF0\x03'
-                        b'\x4C' + find.WILDCARD + b'\x08'):
-            return True
-        return find.at(0x00, t00s00,
-                       b'\x01'
-                       b'\xE0\x70'
-                       b'\xB0\x04'
-                       b'\xE0\x40'
-                       b'\xB0')
+        return find.wild_at(0x00, t00s00, kIDPascalBootloader1) or \
+            find.at(0x00, t00s00, kIDPascalBootloader2)
 
     def IDDavidDOS(self, t00s00):
         """returns True if T00S00 is David-DOS II bootloader, or False otherwise"""
@@ -683,30 +668,23 @@ class BasePassportProcessor: # base class
             # .woz files correctly
             self.tracks[physical_track_num] = self.g.disk_image.seek(physical_track_num)
             self.g.logger.debug("Seeking to track %s" % hex(self.g.track))
-            try_again = True
             tried_reseek = False
-            while try_again:
-                try_again = False
+            while True:
                 physical_sectors = self.rwts.decode_track(self.tracks[physical_track_num], logical_track_num, self.burn)
-                if len(physical_sectors) == self.rwts.sectors_per_track:
-                    # TODO this is bad, we should just ask the RWTS object if we decoded enough sectors,
-                    # so that SunburstRWTS can override the logic on track 0x11
-                    continue
+                if self.rwts.enough(logical_track_num, physical_sectors):
+                    break
                 if supports_reseek and not tried_reseek:
                     self.tracks[physical_track_num] = self.g.disk_image.reseek(physical_track_num)
                     self.g.logger.debug("Reseeking to track %s" % hex(self.g.track))
                     tried_reseek = True
-                    try_again = True
                     continue
                 self.g.logger.debug("found %d sectors" % len(physical_sectors))
-                if self.rwts.__class__ is SunburstRWTS and logical_track_num == 0x11:
-                    # TODO this is bad, see above
-                    continue
                 if (0x0F not in physical_sectors) and self.SkipTrack(logical_track_num, self.tracks[physical_track_num]):
                     physical_sectors = None
-                    continue
+                    break
                 if self.g.tried_univ:
                     if logical_track_num == 0x22 and (0x0F not in physical_sectors):
+                        self.g.logger.PrintByID("fail")
                         self.g.logger.PrintByID("fatal220f")
                         return False
                 else:
@@ -716,11 +694,9 @@ class BasePassportProcessor: # base class
                     self.g.logger.PrintByID("switch", {"sector":0x0F}) # TODO find exact sector
                     self.rwts = UniversalRWTS(self.g)
                     self.g.tried_univ = True
-                    try_again = True
                     continue
                 if logical_track_num == 0 and type(self.rwts) != UniversalRWTSIgnoreEpilogues:
                     self.rwts = UniversalRWTSIgnoreEpilogues(self.g)
-                    try_again = True
                     continue
                 self.g.logger.PrintByID("fail")
                 return False

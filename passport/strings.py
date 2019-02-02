@@ -1,4 +1,4 @@
-__date__ = "2019-02-01"
+__date__ = "2019-02-02"
 
 STRINGS = {
     "header":      "Passport.py by 4am (" + __date__ + ")\n", # max 32 characters

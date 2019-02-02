@@ -1,6 +1,7 @@
 import re
 
 WILDCARD = b'\x97'
+WILDSTR  = "97"
 
 def wild(source_bytes, search_bytes):
     """Search source_bytes (bytes object) for the first instance of search_bytes (bytes_object). search_bytes may contain WILDCARD, which matches any single byte (like "." in a regular expression). Returns index of first match, or -1 if no matches."""

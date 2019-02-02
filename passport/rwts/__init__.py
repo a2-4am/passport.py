@@ -204,6 +204,9 @@ class RWTS:
                     break
         return sectors
 
+    def enough(self, logical_track_num, physical_sectors):
+        return len(physical_sectors) == self.sectors_per_track
+
 from .universal import *
 from .dos33 import *
 from .sunburst import *
