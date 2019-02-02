@@ -162,6 +162,7 @@ class BasePassportProcessor: # base class
             self.g.logger.PrintByID("sync")
             return True
         # TODO IsUnformatted nibble test and other tests
+        # (still need these for disks like Crime Wave and Thunder Bombs)
         return False
 
     def IDDiversi(self, t00s00):
@@ -179,103 +180,32 @@ class BasePassportProcessor: # base class
 
     def IDDavidDOS(self, t00s00):
         """returns True if T00S00 is David-DOS II bootloader, or False otherwise"""
-        if not find.at(0x01, t00s00,
-                       b'\xA5\x27'
-                       b'\xC9\x09'
-                       b'\xD0\x17'):
-            return False
-        return find.wild_at(0x4A, t00s00,
-                            b'\xA2' + find.WILDCARD + \
-                            b'\xBD' + find.WILDCARD + b'\x08' + \
-                            b'\x9D' + find.WILDCARD + b'\x04' + \
-                            b'\xCA'
-                            b'\x10\xF7')
+        return find.at(0x01, t00s00, kIDDavidDOS1) and \
+            find.wild_at(0x4A, t00s00, kIDDavidDOS2)
 
     def IDDatasoft(self, t00s00):
         """returns True if T00S00 is encrypted Datasoft bootloader, or False otherwise"""
-        return find.at(0x00, t00s00,
-                       b'\x01\x4C\x7E\x08\x04\x8A\x0C\xB8'
-                       b'\x00\x56\x10\x7A\x00\x00\x1A\x16'
-                       b'\x12\x0E\x0A\x06\x53\x18\x9A\x02'
-                       b'\x10\x1B\x02\x10\x4D\x56\x15\x0B'
-                       b'\xBF\x14\x14\x54\x54\x54\x92\x81'
-                       b'\x1B\x10\x10\x41\x06\x73\x0A\x10'
-                       b'\x33\x4E\x00\x73\x12\x10\x33\x7C'
-                       b'\x00\x11\x20\xE3\x49\x50\x73\x1A'
-                       b'\x10\x41\x00\x23\x80\x5B\x0A\x10'
-                       b'\x0B\x4E\x9D\x0A\x10\x9D\x0C\x10'
-                       b'\x60\x1E\x53\x10\x90\x53\xBC\x90'
-                       b'\x53\x00\x90\xD8\x52\x00\xD8\x7C'
-                       b'\x00\x53\x80\x0B\x06\x41\x00\x09'
-                       b'\x04\x45\x0C\x63\x04\x90\x94\xD0'
-                       b'\xD4\x23\x04\x91\xA1\xEB\xCD\x06'
-                       b'\x95\xA1\xE1\x98\x97\x86')
+        return find.at(0x00, t00s00, kIDDatasoft)
 
     def IDMicrograms(self, t00s00):
         """returns True if T00S00 is Micrograms bootloader, or False otherwise"""
-        if not find.at(0x01, t00s00,
-                       b'\xA5\x27'
-                       b'\xC9\x09'
-                       b'\xD0\x12'
-                       b'\xA9\xC6'
-                       b'\x85\x3F'):
-            return False
-        return find.at(0x42, t00s00, b'\x4C\x00')
+        return find.at(0x01, t00s00, kIDMicrograms1) and \
+            find.at(0x42, t00s00, kIDMicrograms2)
 
     def IDQuickDOS(self, t00s00):
         """returns True if T00S00 is Quick-DOS bootloader, or False otherwise"""
-        return find.at(0x01, t00s00,
-                       b'\xA5\x27'
-                       b'\xC9\x09'
-                       b'\xD0\x27'
-                       b'\x78'
-                       b'\xAD\x83\xC0')
+        return find.at(0x01, t00s00, kIDQuickDOS)
 
     def IDRDOS(self, t00s00):
         """returns True if T00S00 is Quick-DOS bootloader, or False otherwise"""
-        return find.at(0x00, t00s00,
-                       b'\x01'
-                       b'\xA9\x60'
-                       b'\x8D\x01\x08'
-                       b'\xA2\x00'
-                       b'\xA0\x1F'
-                       b'\xB9\x00\x08'
-                       b'\x49')
+        return find.at(0x00, t00s00, kIDRDOS)
 
     def IDDOS33(self, t00s00):
         """returns True if T00S00 is DOS bootloader or some variation
         that can be safely boot traced, or False otherwise"""
         # Code at $0801 must be standard (with one exception)
-        if not find.wild_at(0x00, t00s00,
-                            b'\x01'
-                            b'\xA5\x27'
-                            b'\xC9\x09'
-                            b'\xD0\x18'
-                            b'\xA5\x2B'
-                            b'\x4A'
-                            b'\x4A'
-                            b'\x4A'
-                            b'\x4A'
-                            b'\x09\xC0'
-                            b'\x85\x3F'
-                            b'\xA9\x5C'
-                            b'\x85\x3E'
-                            b'\x18'
-                            b'\xAD\xFE\x08'
-                            b'\x6D\xFF\x08' + \
-                            find.WILDCARD + find.WILDCARD + find.WILDCARD + \
-                            b'\xAE\xFF\x08'
-                            b'\x30\x15'
-                            b'\xBD\x4D\x08'
-                            b'\x85\x3D'
-                            b'\xCE\xFF\x08'
-                            b'\xAD\xFE\x08'
-                            b'\x85\x27'
-                            b'\xCE\xFE\x08'
-                            b'\xA6\x2B'
-                            b'\x6C\x3E\x00'
-                            b'\xEE\xFE\x08'
-                            b'\xEE\xFE\x08'): return False
+        if not find.wild_at(0x00, t00s00, kIDDOS33a):
+            return False
         # DOS 3.3 has JSR $FE89 / JSR $FE93 / JSR $FB2F
         # some Sierra have STA $C050 / STA $C057 / STA $C055 instead
         # with the unpleasant side-effect of showing text-mode garbage
@@ -661,43 +591,53 @@ class BasePassportProcessor: # base class
         # main loop - loop through disk from track $22 down to track $00
         for logical_track_num in range(0x22, -1, -1):
             self.g.track = logical_track_num # for display purposes only
+            self.g.logger.debug("Seeking to track %s" % hex(self.g.track))
+
             # distinguish between logical and physical track numbers to deal with
             # disks like Sunburst that store logical track 0x11+ on physical track 0x11.5+
             physical_track_num = self.rwts.seek(logical_track_num)
+
             # self.tracks must be indexed by physical track number so we can write out
             # .woz files correctly
             self.tracks[physical_track_num] = self.g.disk_image.seek(physical_track_num)
-            self.g.logger.debug("Seeking to track %s" % hex(self.g.track))
+
             tried_reseek = False
+            physical_sectors = OrderedDict()
             while True:
-                physical_sectors = self.rwts.decode_track(self.tracks[physical_track_num], logical_track_num, self.burn)
+                physical_sectors.update(self.rwts.decode_track(self.tracks[physical_track_num], logical_track_num, self.burn))
                 if self.rwts.enough(logical_track_num, physical_sectors):
                     break
+
                 if supports_reseek and not tried_reseek:
                     self.tracks[physical_track_num] = self.g.disk_image.reseek(physical_track_num)
                     self.g.logger.debug("Reseeking to track %s" % hex(self.g.track))
                     tried_reseek = True
                     continue
+
                 self.g.logger.debug("found %d sectors" % len(physical_sectors))
                 if (0x0F not in physical_sectors) and self.SkipTrack(logical_track_num, self.tracks[physical_track_num]):
                     physical_sectors = None
                     break
+
                 if self.g.tried_univ:
                     if logical_track_num == 0x22 and (0x0F not in physical_sectors):
                         self.g.logger.PrintByID("fail")
                         self.g.logger.PrintByID("fatal220f")
                         return False
                 else:
-                    # TODO wrong in case where we switch mid-track.
-                    # Need to save the sectors that worked with the original RWTS
-                    # then append the ones that worked with the universal RWTS
-                    self.g.logger.PrintByID("switch", {"sector":0x0F}) # TODO find exact sector
+                    transition_sector = 0x0F
+                    if physical_sectors:
+                        temp_logical_sectors = self.rwts.reorder_to_logical_sectors(physical_sectors)
+                        transition_sector = min(temp_logical_sectors.keys())
+                    self.g.logger.PrintByID("switch", {"sector":transition_sector})
                     self.rwts = UniversalRWTS(self.g)
                     self.g.tried_univ = True
                     continue
+
                 if logical_track_num == 0 and type(self.rwts) != UniversalRWTSIgnoreEpilogues:
                     self.rwts = UniversalRWTSIgnoreEpilogues(self.g)
                     continue
+
                 self.g.logger.PrintByID("fail")
                 return False
             self.save_track(physical_track_num, logical_track_num, physical_sectors)
@@ -711,37 +651,14 @@ class BasePassportProcessor: # base class
 
 class Verify(BasePassportProcessor):
     def AnalyzeT00(self, logical_sectors):
-        self.g.is_boot1 = find.at(0x00, logical_sectors[1],
-            b'\x8E\xE9\xB7\x8E\xF7\xB7\xA9\x01'
-            b'\x8D\xF8\xB7\x8D\xEA\xB7\xAD\xE0'
-            b'\xB7\x8D\xE1\xB7\xA9\x02\x8D\xEC'
-            b'\xB7\xA9\x04\x8D\xED\xB7\xAC\xE7'
-            b'\xB7\x88\x8C\xF1\xB7\xA9\x01\x8D'
-            b'\xF4\xB7\x8A\x4A\x4A\x4A\x4A\xAA'
-            b'\xA9\x00\x9D\xF8\x04\x9D\x78\x04')
-        self.g.is_master = find.at(0x00, logical_sectors[1],
-            b'\x8E\xE9\x37\x8E\xF7\x37\xA9\x01'
-            b'\x8D\xF8\x37\x8D\xEA\x37\xAD\xE0'
-            b'\x37\x8D\xE1\x37\xA9\x02\x8D\xEC'
-            b'\x37\xA9\x04\x8D\xED\x37\xAC\xE7'
-            b'\x37\x88\x8C\xF1\x37\xA9\x01\x8D'
-            b'\xF4\x37\x8A\x4A\x4A\x4A\x4A\xAA'
-            b'\xA9\x00\x9D\xF8\x04\x9D\x78\x04')
-        self.g.is_rwts = find.wild_at(0x00, logical_sectors[7],
-            b'\x84\x48\x85\x49\xA0\x02\x8C' + find.WILDCARD + \
-            find.WILDCARD + b'\xA0\x04\x8C' + find.WILDCARD + find.WILDCARD + b'\xA0\x01' + \
-            b'\xB1\x48\xAA\xA0\x0F\xD1\x48\xF0'
-            b'\x1B\x8A\x48\xB1\x48\xAA\x68\x48'
-            b'\x91\x48\xBD\x8E\xC0\xA0\x08\xBD'
-            b'\x8C\xC0\xDD\x8C\xC0\xD0\xF6\x88'
-            b'\xD0\xF8\x68\xAA\xBD\x8E\xC0\xBD'
-            b'\x8C\xC0\xA0\x08\xBD\x8C\xC0\x48')
+        self.g.is_boot1 = find.at(0x00, logical_sectors[1], kIDBoot1)
+        self.g.is_master = find.at(0x00, logical_sectors[1], kIDMaster)
+        self.g.is_rwts = find.wild_at(0x00, logical_sectors[7], kIDRWTS)
 
     def save_track(self, physical_track_num, logical_track_num, physical_sectors):
         if not physical_sectors: return {}
         logical_sectors = self.rwts.reorder_to_logical_sectors(physical_sectors)
-        should_run_patchers = (len(physical_sectors) == 16) # TODO
-        if should_run_patchers:
+        if self.rwts.enough(logical_track_num, physical_sectors):
             # patchers operate on logical tracks
             if logical_track_num == 0:
                 # set additional globals for patchers to use
