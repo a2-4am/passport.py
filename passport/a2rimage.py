@@ -10,7 +10,7 @@ class A2RImage:
         self.filename = filename
         self.tracks = collections.OrderedDict()
         self.a2r_image = a2rchery.A2RReader(filename, stream)
-        self.speed = 0
+        self.speed = 32
 
     def to_bits(self, flux_record):
         """|flux_record| is a dictionary of 'capture_type', 'data_length', 'tick_count', and 'data'"""
