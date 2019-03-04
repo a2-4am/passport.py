@@ -31,7 +31,7 @@ class BaseCommand:
             base, ext = os.path.splitext(args.file)
             ext = ext.lower()
             if ext == ".woz":
-                self.reader = wozardry.WozReader
+                self.reader = wozardry.WozDiskImage
             elif ext == ".edd":
                 self.reader = eddimage.EDDReader
             elif ext == ".a2r":
@@ -40,7 +40,8 @@ class BaseCommand:
                 print("unrecognized file type")
         if not self.logger:
             self.logger = args.debug and DebugLogger or DefaultLogger
-        self.processor(self.reader(args.file), self.logger)
+        with open(args.file, "rb") as f:
+            self.processor(args.file, self.reader(f), self.logger)
 
 class CommandVerify(BaseCommand):
     def __init__(self):

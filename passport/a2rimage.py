@@ -6,11 +6,13 @@ import collections
 class A2RSeekError(a2rchery.A2RError): pass
 
 class A2RImage:
-    def __init__(self, filename=None, stream=None):
-        self.filename = filename
+    def __init__(self, iostream):
         self.tracks = collections.OrderedDict()
-        self.a2r_image = a2rchery.A2RReader(filename, stream)
+        self.a2r_image = a2rchery.A2RReader(stream=iostream)
         self.speed = 32
+
+    def to_json(self):
+        return self.a2r_image.to_json()
 
     def to_bits(self, flux_record):
         """|flux_record| is a dictionary of 'capture_type', 'data_length', 'tick_count', and 'data'"""

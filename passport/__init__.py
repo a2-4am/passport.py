@@ -6,6 +6,8 @@ from passport.constants import *
 from passport.util import *
 from passport import wozardry
 import bitarray
+import io
+import json
 import os.path
 import time
 
@@ -48,10 +50,12 @@ class PassportGlobals:
         self.track = 0 # display purposes only
         self.sector = 0 # display purposes only
         self.last_track = 0
+        self.filename = None
 
 class BasePassportProcessor: # base class
-    def __init__(self, disk_image, logger_class=DefaultLogger):
+    def __init__(self, filename, disk_image, logger_class=DefaultLogger):
         self.g = PassportGlobals()
+        self.g.filename = filename
         self.g.disk_image = disk_image
         self.g.logger = logger_class(self.g)
         self.rwts = None
@@ -571,7 +575,7 @@ class BasePassportProcessor: # base class
 
     def run(self):
         self.g.logger.PrintByID("header")
-        self.g.logger.PrintByID("reading", {"filename":self.g.disk_image.filename})
+        self.g.logger.PrintByID("reading", {"filename":self.g.filename})
         supports_reseek = ("reseek" in dir(self.g.disk_image))
 
         # get raw track $00 data from the source disk
@@ -621,7 +625,7 @@ class BasePassportProcessor: # base class
 
                 if self.g.tried_univ:
                     if logical_track_num == 0x22 and (0x0F not in physical_sectors):
-                        self.g.logger.PrintByID("fail")
+                        self.g.logger.PrintByID("fail", {"sector":0x0F})
                         self.g.logger.PrintByID("fatal220f")
                         return False
                 else:
@@ -699,7 +703,7 @@ class Crack(Verify):
                 logical_sectors[patch.sector_num].decoded = b
 
     def postprocess(self):
-        source_base, source_ext = os.path.splitext(self.g.disk_image.filename)
+        source_base, source_ext = os.path.splitext(self.g.filename)
         output_filename = source_base + '.dsk'
         self.g.logger.PrintByID("writing", {"filename":output_filename})
         with open(output_filename, "wb") as f:
@@ -732,21 +736,26 @@ class Convert(BasePassportProcessor):
         self.output_tracks[physical_track_num] = wozardry.Track(b, len(b))
 
     def postprocess(self):
-        source_base, source_ext = os.path.splitext(self.g.disk_image.filename)
+        source_base, source_ext = os.path.splitext(self.g.filename)
         output_filename = source_base + '.woz'
         self.g.logger.PrintByID("writing", {"filename":output_filename})
-        woz_image = wozardry.WozWriter(STRINGS["header"].strip())
-        woz_image.info["cleaned"] = self.g.found_and_cleaned_weakbits
-        woz_image.info["write_protected"] = self.g.protection_enforces_write_protected
+        woz_image = wozardry.WozDiskImage()
+        json_string = self.g.disk_image.to_json()
+        woz_image.from_json(json_string)
+        j = json.loads(json_string)
+        root = [x for x in j.keys()].pop()
+        woz_image.info["creator"] = STRINGS["header"].strip()[:32]
+        woz_image.info["synchronized"] = j[root]["info"]["synchronized"]
+        woz_image.info["cleaned"] = True #self.g.found_and_cleaned_weakbits
+        woz_image.info["write_protected"] = self.g.protection_enforces_write_protected or j[root]["info"]["write_protected"]
         woz_image.meta["image_date"] = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
         for q in range(1 + (0x23 * 4)):
             physical_track_num = q / 4
             if physical_track_num in self.output_tracks:
                 woz_image.add_track(physical_track_num, self.output_tracks[physical_track_num])
-        with open(output_filename, 'wb') as f:
-            woz_image.write(f)
         try:
-            wozardry.WozReader(output_filename)
+            wozardry.WozDiskImage(io.BytesIO(bytes(woz_image)))
         except Exception as e:
-            os.remove(output_filename)
             raise Exception from e
+        with open(output_filename, 'wb') as f:
+            f.write(bytes(woz_image))
