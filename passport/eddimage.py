@@ -8,6 +8,7 @@ class EDDSeekError(EDDError): pass
 
 class EDDReader:
     def __init__(self, iostream):
+        self.tracks = []
         for i in range(137):
             raw_bytes = iostream.read(16384)
             raise_if(len(raw_bytes) != 16384, EDDLengthError, "Bad EDD file (did you image by quarter tracks?)")
