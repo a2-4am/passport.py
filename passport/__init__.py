@@ -727,7 +727,11 @@ class Convert(BasePassportProcessor):
         if physical_sectors:
             b = bitarray.bitarray(endian="big")
             for s in physical_sectors.values():
-                b.extend(track.bits[s.start_bit_index:s.end_bit_index])
+                if s.start_bit_index <= s.end_bit_index:
+                    b.extend(track.bits[s.start_bit_index:s.end_bit_index])
+                else:
+                    b.extend(track.bits[s.start_bit_index:])
+                    b.extend(track.bits[:s.end_bit_index])
         else:
             # TODO call wozify here instead
             b = track.bits[:51021]
