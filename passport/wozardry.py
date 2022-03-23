@@ -578,7 +578,7 @@ class WozDiskImage:
             block_size = len(padded_bytes) // 512
             starting_block += block_size
             trk_chunk.extend(to_uint16(block_size))
-            trk_chunk.extend(to_uint32(track.bits.length()))
+            trk_chunk.extend(to_uint32(len(track.bits)))
             bits_chunk.extend(padded_bytes)
         for i in range(len(self.tracks), 160):
             trk_chunk.extend(to_uint16(0))
